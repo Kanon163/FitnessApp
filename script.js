@@ -8,24 +8,24 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: '二头弯举', tags: ['臂'] }, { name: '三头下压', tags: ['臂'] },
     ];
     let workoutHistory = {};
-    let todayLog = [];
+    let currentLog = [];
+    let selectedDate = new Date();
     let currentFilter = 'all';
     let restTimerInterval;
-    const today = new Date().toISOString().slice(0, 10);
 
     // --- 获取页面元素 ---
     const currentDateElem = document.getElementById('current-date');
-    const currentTimeElem = document.getElementById('current-time');
     const focusInput = document.getElementById('focus-input');
     const workoutBody = document.getElementById('workout-body');
     const addWorkoutBtn = document.getElementById('add-workout-btn');
     const exportBtn = document.getElementById('export-btn');
-    // 动作模态框
+    const prevDayBtn = document.getElementById('prev-day-btn');
+    const nextDayBtn = document.getElementById('next-day-btn');
+    // 模态框
     const actionModal = document.getElementById('action-modal');
     const closeActionModalBtn = document.getElementById('close-action-modal-btn');
     const actionList = document.getElementById('action-list');
     const modalFilterContainer = document.getElementById('modal-filter-container');
-    // 日志模态框
     const viewLogBtn = document.getElementById('view-log-btn');
     const logModal = document.getElementById('log-modal');
     const closeLogModalBtn = document.getElementById('close-log-modal-btn');
@@ -34,9 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 主流程 ---
     function init() {
-        updateTime();
-        setInterval(updateTime, 1000);
         loadData();
+        updateDateDisplay();
         renderTable();
         renderFilterButtons();
         setupEventListeners();
@@ -46,32 +45,55 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupEventListeners() {
         addWorkoutBtn.addEventListener('click', () => actionModal.style.display = 'flex');
         closeActionModalBtn.addEventListener('click', () => actionModal.style.display = 'none');
-        exportBtn.addEventListener('click', () => exportToCSV([today]));
+        const dateKey = selectedDate.toISOString().slice(0, 10);
+        exportBtn.addEventListener('click', () => exportToCSV([dateKey]));
 
-        focusInput.addEventListener('change', () => {
-            workoutHistory[today].focus = focusInput.value;
+        focusInput.addEventListener('change', (e) => {
+            const dateKey = selectedDate.toISOString().slice(0, 10);
+            workoutHistory[dateKey].focus = e.target.value;
             saveData();
         });
+
+        prevDayBtn.addEventListener('click', () => changeDate(-1));
+        nextDayBtn.addEventListener('click', () => changeDate(1));
 
         modalFilterContainer.addEventListener('click', handleFilterClick);
         actionList.addEventListener('click', handleActionSelect);
         workoutBody.addEventListener('click', handleTableClick);
         workoutBody.addEventListener('change', handleTableInputChange);
 
-        // 日志功能事件
         viewLogBtn.addEventListener('click', showLogModal);
         closeLogModalBtn.addEventListener('click', () => logModal.style.display = 'none');
         exportSelectedBtn.addEventListener('click', exportSelectedLogs);
+        logList.addEventListener('click', handleLogItemClick);
+    }
+
+    // --- 日期处理 ---
+    function changeDate(days) {
+        selectedDate.setDate(selectedDate.getDate() + days);
+        loadData();
+        updateDateDisplay();
+        renderTable();
+    }
+
+    function updateDateDisplay() {
+        const dateKey = selectedDate.toISOString().slice(0, 10);
+        const todayKey = new Date().toISOString().slice(0, 10);
+        let display_text = dateKey;
+        if (dateKey === todayKey) {
+            display_text += ' (今天)';
+        }
+        currentDateElem.textContent = display_text;
     }
 
     // --- 渲染和核心逻辑 ---
     function renderTable() {
         workoutBody.innerHTML = '';
-        if (todayLog.length === 0) {
-            workoutBody.innerHTML = `<tr><td colspan="8">点击右下角 "+" 开始添加训练</td></tr>`;
+        if (currentLog.length === 0) {
+            workoutBody.innerHTML = `<tr><td colspan="8">点击右下角 "+" 为该日添加训练</td></tr>`;
             return;
         }
-        todayLog.forEach((item, index) => {
+        currentLog.forEach((item, index) => {
             const row = document.createElement('tr');
             row.dataset.index = index;
             row.innerHTML = `
@@ -100,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addSet(actionName, options = {}) {
-        todayLog.push({
+        currentLog.push({
             name: actionName,
             set: options.set || 1,
             weight: options.weight || '',
@@ -112,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         renderTable();
     }
-    
+
     // --- 事件处理函数 ---
     function handleTableClick(e) {
         const target = e.target;
@@ -120,13 +142,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!row || !row.dataset.index) return;
         
         const index = parseInt(row.dataset.index);
-        const item = todayLog[index];
+        const item = currentLog[index];
 
         if (target.classList.contains('set-cell')) {
-            addSet(item.name, { set: item.set + 1, weight: item.weight, rpe: item.rpe });
+            addSet(item.name, { set: item.set + 1, weight: item.weight, rpe: item.rpe, notes: item.notes });
         } else if (target.classList.contains('delete-btn')) {
             if (confirm(`确定要删除“${item.name}”的第 ${item.set} 组吗？`)) {
-                todayLog.splice(index, 1);
+                currentLog.splice(index, 1);
                 renderTable();
             }
         } else if (target.classList.contains('btn-start-rest')) {
@@ -149,22 +171,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const target = e.target;
         const row = target.closest('tr');
         if (!row || !row.dataset.index) return;
-        const index = parseInt(row.dataset.index);
-        const item = todayLog[index];
-        
-        const classMap = {
-            'weight-input': 'weight',
-            'reps-input': 'reps',
-            'rpe-input': 'rpe',
-            'notes-input': 'notes'
-        };
-        const key = classMap[target.className];
-        if (key) {
-            item[key] = target.value;
-            saveData();
-        }
-    }
 
+        const index = parseInt(row.dataset.index);
+        const item = currentLog[index];
+        const classMap = { 'weight-input': 'weight', 'reps-input': 'reps', 'rpe-input': 'rpe', 'notes-input': 'notes' };
+        const key = classMap[target.className];
+        if (key) { item[key] = target.value; saveData(); }
+    }
+    
     function handleFilterClick(e) {
         if (e.target.classList.contains('filter-btn')) {
             currentFilter = e.target.dataset.part;
@@ -178,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
             actionModal.style.display = 'none';
         }
     }
-    
+
     // --- 日志功能 ---
     function showLogModal() {
         renderLogList();
@@ -187,37 +201,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderLogList() {
         logList.innerHTML = '';
-        const dates = Object.keys(workoutHistory).sort().reverse(); // 按日期倒序
-        if (dates.length === 0) {
-            logList.innerHTML = '<p>没有历史记录。</p>';
-            return;
-        }
+        const dates = Object.keys(workoutHistory).sort().reverse();
+        if (dates.length === 0) { logList.innerHTML = '<p>没有历史记录。</p>'; return; }
+        
         dates.forEach(date => {
             const dayData = workoutHistory[date];
-            if (dayData.log && dayData.log.length > 0) { // 只显示有训练记录的日期
+            if (dayData.log && dayData.log.length > 0) {
                 const item = document.createElement('div');
                 item.className = 'log-item';
+                item.dataset.date = date; // 为整个条目设置日期
                 item.innerHTML = `
-                    <input type="checkbox" data-date="${date}">
+                    <input type="checkbox" data-date="${date}" onclick="event.stopPropagation()">
                     <div class="log-item-info">
                         <span class="date">${date}</span>
                         <span class="focus">重点: ${dayData.focus || '未填写'}</span>
-                    </div>
-                `;
+                    </div>`;
                 logList.appendChild(item);
             }
         });
     }
 
-    function exportSelectedLogs() {
-        const selectedDates = [];
-        logList.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
-            selectedDates.push(checkbox.dataset.date);
-        });
-        if (selectedDates.length === 0) {
-            alert('请至少选择一个日期进行导出。');
-            return;
+    function handleLogItemClick(e) {
+        const target = e.target;
+        if (target.closest('.log-item') && !target.matches('input[type="checkbox"]')) {
+            const dateStr = target.closest('.log-item').dataset.date;
+            selectedDate = new Date(dateStr + 'T12:00:00'); // 设置时间避免时区问题
+            loadData();
+            updateDateDisplay();
+            renderTable();
+            logModal.style.display = 'none';
         }
+    }
+
+    function exportSelectedLogs() {
+        const selectedDates = Array.from(logList.querySelectorAll('input:checked')).map(cb => cb.dataset.date);
+        if (selectedDates.length === 0) { alert('请至少选择一个日期进行导出。'); return; }
         exportToCSV(selectedDates);
     }
 
@@ -228,35 +246,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const dayData = workoutHistory[date];
             if (dayData && dayData.log) {
                 const focus = dayData.focus || '未填写';
-                dayData.log.forEach(item => {
-                    allLogs.push({ ...item, date, focus });
-                });
+                dayData.log.forEach(item => allLogs.push({ ...item, date, focus }));
             }
         });
-
-        if (allLogs.length === 0) {
-            alert('选中的日期没有训练记录可以导出。');
-            return;
-        }
+        if (allLogs.length === 0) { alert('选中的日期没有训练记录可以导出。'); return; }
 
         let csvContent = "data:text/csv;charset=utf-8,";
         csvContent += "日期,训练重点,动作,组数,重量(kg),次数,RPE,备注,休息时间(s)\n";
 
         allLogs.forEach(item => {
-            const rowData = [
-                item.date,
-                item.focus,
-                item.name,
-                item.set,
-                item.weight,
-                `"${item.reps}"`, // 用引号包裹以防逗号问题
-                item.rpe,
-                `"${item.notes}"`,
-                item.restTime
-            ].join(",");
+            const rowData = [ item.date, item.focus, item.name, item.set, item.weight, `"${item.reps}"`, item.rpe, `"${item.notes}"`, item.restTime ].join(",");
             csvContent += rowData + "\n";
         });
-
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -266,8 +267,11 @@ document.addEventListener('DOMContentLoaded', () => {
         link.click();
         document.body.removeChild(link);
     }
-
-    // --- 渲染和时间函数 ---
+    
+    // --- 渲染和通用函数 ---
+    function renderFilterButtons() { /* ... V4代码无变化 ... */ }
+    function renderActionList() { /* ... V4代码无变化 ... */ }
+    
     function renderFilterButtons() {
         const parts = ['all', '胸', '背', '肩', '腿', '臂'];
         modalFilterContainer.innerHTML = '';
@@ -294,14 +298,8 @@ document.addEventListener('DOMContentLoaded', () => {
             actionList.appendChild(div);
         });
     }
-    
-    function updateTime() {
-        const now = new Date();
-        currentDateElem.textContent = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
-        currentTimeElem.textContent = now.toLocaleTimeString('zh-CN');
-    }
 
-    // --- 本地存储 ---
+    // --- 本地存储 (关键改动) ---
     function saveData() {
         localStorage.setItem('fitnessAppHistory', JSON.stringify(workoutHistory));
     }
@@ -311,12 +309,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (savedHistory) {
             workoutHistory = JSON.parse(savedHistory);
         }
-        if (workoutHistory[today]) {
-            todayLog = workoutHistory[today].log;
-            focusInput.value = workoutHistory[today].focus || '';
+        const dateKey = selectedDate.toISOString().slice(0, 10);
+        if (workoutHistory[dateKey]) {
+            currentLog = workoutHistory[dateKey].log;
+            focusInput.value = workoutHistory[dateKey].focus || '';
         } else {
-            workoutHistory[today] = { focus: '', log: [] };
-            todayLog = workoutHistory[today].log;
+            workoutHistory[dateKey] = { focus: '', log: [] };
+            currentLog = workoutHistory[dateKey].log;
+            focusInput.value = '';
         }
     }
     

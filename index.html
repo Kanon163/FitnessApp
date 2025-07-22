@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>健身记录器 V4</title>
+    <title>健身记录器 V5</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#007bff">
 </head>
 <body>
 
@@ -17,9 +19,10 @@
                 <button id="export-btn">导出本日</button>
             </div>
         </div>
-        <div id="datetime">
+        <div id="date-nav">
+            <button id="prev-day-btn">&lt; 前一天</button>
             <p id="current-date"></p>
-            <p id="current-time"></p>
+            <button id="next-day-btn">后一天 &gt;</button>
         </div>
         <div class="focus-container">
             <label for="focus-input">本日重点:</label>
@@ -28,48 +31,66 @@
     </header>
 
     <main>
-        <div class="table-container">
-            <table id="workout-table">
-                <thead>
-                    <tr>
-                        <th>动作</th>
-                        <th>组数</th>
-                        <th>重量(kg)</th>
-                        <th>次数</th>
-                        <th>RPE</th>
-                        <th>备注</th>
-                        <th>休息(s)</th>
-                        <th>删除</th>
-                    </tr>
-                </thead>
-                <tbody id="workout-body"></tbody>
-            </table>
+        <div class="table-wrapper">
+            <div class="table-container">
+                <table id="workout-table">
+                    <thead>
+                        <tr>
+                            <th>动作</th>
+                            <th>组数</th>
+                            <th>重量(kg)</th>
+                            <th>次数</th>
+                            <th>RPE</th>
+                            <th>备注</th>
+                            <th>休息(s)</th>
+                            <th>删除</th>
+                        </tr>
+                    </thead>
+                    <tbody id="workout-body"></tbody>
+                </table>
+            </div>
         </div>
     </main>
+    
+    <footer>
+        <p>健身记录器 V5 | Made with ❤️ by Gemini</p>
+    </footer>
 
     <button id="add-workout-btn">+</button>
 
-    <div id="action-modal" class="modal-hidden">
+    <div id="action-modal" class="modal modal-hidden">
         <div class="modal-content">
             <h2>选择一个动作</h2>
             <div id="modal-filter-container"></div>
             <div id="action-list"></div>
-            <button id="close-action-modal-btn">关闭</button>
+            <button id="close-action-modal-btn" class="close-btn">关闭</button>
         </div>
     </div>
 
-    <div id="log-modal" class="modal-hidden">
+    <div id="log-modal" class="modal modal-hidden">
         <div class="modal-content">
-            <h2>训练日志</h2>
+            <h2>训练日志 (点击日期跳转)</h2>
             <div id="log-list">
                 </div>
             <div class="log-actions">
                 <button id="export-selected-btn">导出选中记录</button>
-                <button id="close-log-modal-btn">关闭</button>
+                <button id="close-log-modal-btn" class="close-btn">关闭</button>
             </div>
         </div>
     </div>
 
+    <script>
+        // 注册Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
     <script src="script.js"></script>
 </body>
 </html>
