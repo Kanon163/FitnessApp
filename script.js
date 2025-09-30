@@ -1,21 +1,23 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- 状态和全局变量 ---
     let workoutHistory = {};
-    let currentLog = [];
+    let currentLog = []; // 存储当天的所有"组"对象
     let selectedDate = new Date();
     let currentFilter = 'all';
     let restTimerInterval;
-    let actionLibrary = getActionLibrary(); // 从新文件中加载
+    let actionLibrary = getActionLibrary(); // 从 action-library.js 加载
+    let weightUnit = localStorage.getItem('fitnessWeightUnit') || 'kg';
 
     // --- 获取页面元素 ---
+    const workoutContainer = document.getElementById('workout-container');
     const currentDateElem = document.getElementById('current-date');
     const focusInput = document.getElementById('focus-input');
-    const workoutBody = document.getElementById('workout-body');
     const addWorkoutBtn = document.getElementById('add-workout-btn');
-    const exportBtn = document.getElementById('export-btn');
     const prevDayBtn = document.getElementById('prev-day-btn');
     const nextDayBtn = document.getElementById('next-day-btn');
-    // 模态框
+    const unitSwitcher = document.getElementById('unit-switcher');
+    
+    // 模态框元素
     const actionModal = document.getElementById('action-modal');
     const closeActionModalBtn = document.getElementById('close-action-modal-btn');
     const actionList = document.getElementById('action-list');
@@ -25,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeLogModalBtn = document.getElementById('close-log-modal-btn');
     const logList = document.getElementById('log-list');
     const exportSelectedBtn = document.getElementById('export-selected-btn');
-    // 动作库模态框
     const manageLibraryBtn = document.getElementById('manage-library-btn');
     const libraryModal = document.getElementById('library-modal');
     const closeLibraryModalBtn = document.getElementById('close-library-modal-btn');
@@ -40,32 +41,40 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
         loadData();
         updateDateDisplay();
-        renderTable();
-        renderFilterButtons();
+        updateUnitButtons();
+        renderWorkoutModules();
         setupEventListeners();
     }
 
     // --- 事件监听器 ---
     function setupEventListeners() {
+        // 主界面
         addWorkoutBtn.addEventListener('click', () => { renderActionList(); actionModal.style.display = 'flex'; });
-        closeActionModalBtn.addEventListener('click', () => actionModal.style.display = 'none');
-        exportBtn.addEventListener('click', () => exportToCSV([selectedDate.toISOString().slice(0, 10)]));
-        focusInput.addEventListener('change', (e) => {
-            const dateKey = selectedDate.toISOString().slice(0, 10);
-            workoutHistory[dateKey].focus = e.target.value;
-            saveData();
-        });
         prevDayBtn.addEventListener('click', () => changeDate(-1));
         nextDayBtn.addEventListener('click', () => changeDate(1));
-        modalFilterContainer.addEventListener('click', handleFilterClick);
+        workoutContainer.addEventListener('click', handleModuleClick);
+        workoutContainer.addEventListener('change', handleModuleInputChange);
+        unitSwitcher.addEventListener('click', handleUnitSwitch);
+        focusInput.addEventListener('change', (e) => {
+            const dateKey = selectedDate.toISOString().slice(0, 10);
+            if(workoutHistory[dateKey]) {
+                workoutHistory[dateKey].focus = e.target.value;
+                saveData();
+            }
+        });
+        
+        // 动作选择模态框
+        closeActionModalBtn.addEventListener('click', () => actionModal.style.display = 'none');
         actionList.addEventListener('click', handleActionSelect);
-        workoutBody.addEventListener('click', handleTableClick);
-        workoutBody.addEventListener('change', handleTableInputChange);
+        modalFilterContainer.addEventListener('click', handleFilterClick);
+
+        // 日志模态框
         viewLogBtn.addEventListener('click', showLogModal);
         closeLogModalBtn.addEventListener('click', () => logModal.style.display = 'none');
-        exportSelectedBtn.addEventListener('click', exportSelectedLogs);
         logList.addEventListener('click', handleLogItemClick);
-        // 动作库事件
+        exportSelectedBtn.addEventListener('click', exportSelectedLogs);
+        
+        // 动作库模态框
         manageLibraryBtn.addEventListener('click', showLibraryModal);
         closeLibraryModalBtn.addEventListener('click', () => libraryModal.style.display = 'none');
         exportLibraryBtn.addEventListener('click', exportLibraryToCSV);
@@ -74,12 +83,207 @@ document.addEventListener('DOMContentLoaded', () => {
         libraryListContainer.addEventListener('click', handleLibraryActions);
     }
 
+    // --- V7 核心：模块化渲染 ---
+    function renderWorkoutModules() {
+        workoutContainer.innerHTML = '';
+
+        const actionGroups = currentLog.reduce((acc, set) => {
+            if (!acc[set.name]) {
+                acc[set.name] = [];
+            }
+            acc[set.name].push(set);
+            return acc;
+        }, {});
+
+        if (Object.keys(actionGroups).length === 0) {
+            workoutContainer.innerHTML = '<p class="empty-state">点击右下角 "+" 开始添加训练</p>';
+            return;
+        }
+
+        for (const actionName in actionGroups) {
+            const sets = actionGroups[actionName];
+            // 确保所有组共享同一个UI状态对象
+            const uiState = sets[0].uiState || { isVExpanded: false, isHExpanded: false, currentSetIndex: sets.length - 1 };
+            sets.forEach(s => s.uiState = uiState);
+
+            const currentSetIndex = uiState.currentSetIndex;
+            const currentSet = sets[currentSetIndex];
+
+            const module = document.createElement('div');
+            module.className = 'workout-module';
+            module.dataset.actionName = actionName;
+
+            module.innerHTML = `
+                <div class="focus-row-wrapper ${uiState.isHExpanded ? 'expanded' : ''}">
+                    <div class="focus-row">
+                        <span class="action-name">${actionName}</span>
+                        <span class="set-info">第 ${currentSet.set} 组</span>
+                        <input type="text" class="reps-input" placeholder="次数" value="${currentSet.reps || ''}">
+                        <button class="confirm-set-btn" title="确认并开始下一组"><i class="fas fa-check-circle"></i></button>
+                        <button class="expand-btn vertical" title="查看历史组"><i class="fas fa-chevron-down ${uiState.isVExpanded ? 'expanded' : ''}"></i></button>
+                        <button class="expand-btn horizontal" title="展开详细信息"><i class="fas fa-arrow-right"></i></button>
+                    </div>
+                    <div class="details-row">
+                        <button class="expand-btn horizontal" title="收起详细信息"><i class="fas fa-arrow-left"></i></button>
+                        <input type="number" class="weight-input" placeholder="重量" value="${currentSet.weight || ''}">
+                        <input type="number" class="rpe-input" step="0.1" placeholder="RPE" value="${currentSet.rpe || ''}">
+                        <input type="text" class="notes-input" placeholder="备注" value="${currentSet.notes || ''}">
+                        <button class="rest-timer-btn" title="休息计时"><i class="fas fa-clock"></i></button>
+                        <button class="delete-set-btn" title="删除本组"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+                <div class="sets-history-container ${uiState.isVExpanded ? 'expanded' : ''}">
+                    <div class="history-list"></div>
+                </div>
+            `;
+            workoutContainer.appendChild(module);
+            
+            if (uiState.isVExpanded) {
+                const historyList = module.querySelector('.history-list');
+                const records = findPerformanceRecords(actionName);
+                if (records.best) historyList.appendChild(createHintItem('历史最佳', records.best));
+                if (records.last) historyList.appendChild(createHintItem('上一次', records.last));
+                sets.forEach(set => historyList.appendChild(createHistoryItem(set)));
+            }
+        }
+        saveData();
+    }
+
+    function createHistoryItem(set) {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        const capacity = (set.weight && set.reps) ? (parseFloat(set.weight) * parseInt(set.reps.split(',')[0])).toFixed(1) : '-';
+        item.innerHTML = `
+            <span class="history-item-label">第 ${set.set} 组:</span>
+            <span>${set.weight || '-'} ${weightUnit} × ${set.reps || '-'} reps</span>
+            <span>容量: ${capacity}</span>
+            <span>RPE: ${set.rpe || '-'}</span>
+        `;
+        return item;
+    }
+    
+    function createHintItem(label, record) {
+        const item = document.createElement('div');
+        item.className = 'hint-item';
+        const capacity = (record.weight && record.reps) ? (parseFloat(record.weight) * parseInt(record.reps.split(',')[0])).toFixed(1) : '-';
+        item.innerHTML = `
+            <span class="history-item-label">${label} (${record.date}):</span>
+            <span>${record.weight || '-'} ${weightUnit} × ${record.reps || '-'} reps</span>
+            <span>容量: ${capacity}</span>
+            <span>RPE: ${record.rpe || '-'}</span>
+        `;
+        return item;
+    }
+
+    // --- V7 事件处理 ---
+    function handleModuleClick(e) {
+        const module = e.target.closest('.workout-module');
+        if (!module) return;
+        const actionName = module.dataset.actionName;
+        const groupData = findGroupData(actionName);
+        if (!groupData) return;
+
+        if (e.target.closest('.expand-btn.vertical')) {
+            groupData.uiState.isVExpanded = !groupData.uiState.isVExpanded;
+        } else if (e.target.closest('.expand-btn.horizontal')) {
+            groupData.uiState.isHExpanded = !groupData.uiState.isHExpanded;
+        } else if (e.target.closest('.confirm-set-btn')) {
+            const lastSetNumber = groupData.sets.reduce((max, set) => Math.max(max, set.set), 0);
+            addSet(actionName, { set: lastSetNumber + 1 });
+            const newGroupData = findGroupData(actionName);
+            newGroupData.uiState.currentSetIndex = newGroupData.sets.length - 1;
+        } else if (e.target.closest('.delete-set-btn')) {
+            const setToDelete = groupData.sets[groupData.uiState.currentSetIndex];
+            if (confirm(`确定要删除“${actionName}”的第 ${setToDelete.set} 组吗？`)) {
+                const logIndex = currentLog.indexOf(setToDelete);
+                if (logIndex > -1) currentLog.splice(logIndex, 1);
+                
+                const newGroupData = findGroupData(actionName);
+                if (newGroupData) {
+                    newGroupData.uiState.currentSetIndex = Math.max(0, newGroupData.sets.length - 1);
+                }
+            }
+        } else if (e.target.closest('.action-name')) {
+            const newName = prompt(`输入 "${actionName}" 的新名称：`, actionName);
+            if (newName && newName.trim() && newName.trim() !== actionName) {
+                if (confirm(`确定要将所有 "${actionName}" 的记录和库项目重命名为 "${newName}" 吗？此操作不可撤销。`)) {
+                    globalRenameAction(actionName, newName.trim());
+                }
+            }
+        }
+
+        renderWorkoutModules();
+    }
+    
+    function handleModuleInputChange(e) {
+        const module = e.target.closest('.workout-module');
+        if (!module) return;
+        const actionName = module.dataset.actionName;
+        const groupData = findGroupData(actionName);
+        if (!groupData) return;
+        
+        const currentSet = groupData.sets[groupData.uiState.currentSetIndex];
+        const classMap = { 'weight-input': 'weight', 'reps-input': 'reps', 'rpe-input': 'rpe', 'notes-input': 'notes' };
+        const key = Object.keys(classMap).find(cls => e.target.classList.contains(cls));
+        if (key) {
+            currentSet[classMap[key]] = e.target.value;
+            saveData();
+        }
+    }
+
+    function findGroupData(actionName) {
+        const sets = currentLog.filter(item => item.name === actionName);
+        if (sets.length === 0) return null;
+        return { sets, uiState: sets[0].uiState };
+    }
+
+    function addSet(actionName, options = {}) {
+        const newSet = { name: actionName, set: options.set || 1, reps: '', weight: '', rpe: '', notes: '' };
+        const existingGroup = findGroupData(actionName);
+        if (existingGroup) {
+            newSet.uiState = existingGroup.uiState;
+        } else {
+            newSet.uiState = { isVExpanded: false, isHExpanded: false, currentSetIndex: 0 };
+        }
+        currentLog.push(newSet);
+    }
+    
+    function globalRenameAction(oldName, newName) {
+        actionLibrary = getActionLibrary();
+        const libraryItem = actionLibrary.find(item => item.name === oldName);
+        if(libraryItem) libraryItem.name = newName;
+        saveActionLibrary(actionLibrary);
+
+        Object.values(workoutHistory).forEach(dayData => {
+            dayData.log.forEach(item => {
+                if (item.name === oldName) item.name = newName;
+            });
+        });
+        saveData();
+        renderWorkoutModules();
+    }
+    
+    function handleUnitSwitch(e) {
+        if (e.target.classList.contains('unit-btn')) {
+            weightUnit = e.target.dataset.unit;
+            localStorage.setItem('fitnessWeightUnit', weightUnit);
+            updateUnitButtons();
+            renderWorkoutModules();
+        }
+    }
+
+    function updateUnitButtons() {
+        unitSwitcher.querySelectorAll('.unit-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.unit === weightUnit);
+        });
+    }
+
     // --- 日期处理 ---
     function changeDate(days) {
         selectedDate.setDate(selectedDate.getDate() + days);
         loadData();
         updateDateDisplay();
-        renderTable();
+        renderWorkoutModules();
     }
 
     function updateDateDisplay() {
@@ -88,172 +292,18 @@ document.addEventListener('DOMContentLoaded', () => {
         currentDateElem.textContent = `${dateKey}${dateKey === todayKey ? ' (今天)' : ''}`;
     }
 
-    // --- 渲染和核心逻辑 ---
-    function renderTable() {
-        workoutBody.innerHTML = '';
-        if (currentLog.length === 0) {
-            workoutBody.innerHTML = `<tr><td colspan="9">点击右下角 "+" 为该日添加训练</td></tr>`;
-            return;
-        }
-
-        const groupedByAction = currentLog.reduce((acc, item) => {
-            if (!acc[item.name]) acc[item.name] = [];
-            acc[item.name].push(item);
-            return acc;
-        }, {});
-
-        Object.keys(groupedByAction).forEach(actionName => {
-            const sets = groupedByAction[actionName];
-            const records = findPerformanceRecords(actionName);
-            
-            // 插入提示行
-            if (records.best) insertHintRow('历史最佳', records.best);
-            if (records.last) insertHintRow('上一次', records.last);
-
-            // 渲染正式组
-            sets.forEach(item => {
-                const index = currentLog.indexOf(item);
-                const row = document.createElement('tr');
-                row.dataset.index = index;
-                const capacity = (item.weight && item.reps) ? (parseFloat(item.weight) * parseInt(item.reps.split(',')[0])) : 0;
-                row.innerHTML = `
-                    <td>${item.name}</td>
-                    <td class="set-cell">${item.set}</td>
-                    <td><input type="number" class="weight-input" value="${item.weight || ''}"></td>
-                    <td><input type="text" class="reps-input" value="${item.reps || ''}"></td>
-                    <td class="capacity-cell">${capacity.toFixed(1)}</td>
-                    <td><input type="number" class="rpe-input" step="0.1" value="${item.rpe || ''}"></td>
-                    <td><input type="text" class="notes-input" value="${item.notes || ''}"></td>
-                    <td class="rest-cell"></td>
-                    <td class="action-cell"><i class="fas fa-trash-alt delete-btn"></i></td>
-                `;
-                updateRestCell(row.querySelector('.rest-cell'), item);
-                workoutBody.appendChild(row);
-            });
-        });
-        saveData();
-    }
-    
-    function insertHintRow(label, record) {
-        if (!record) return;
-        const row = document.createElement('tr');
-        row.className = 'hint-row';
-        const capacity = (record.weight && record.reps) ? (parseFloat(record.weight) * parseInt(record.reps.split(',')[0])) : 0;
-        row.innerHTML = `
-            <td class="hint-label">${label} (${record.date})</td>
-            <td>-</td>
-            <td>${record.weight || ''}</td>
-            <td>${record.reps || ''}</td>
-            <td>${capacity.toFixed(1)}</td>
-            <td>${record.rpe || ''}</td>
-            <td>${record.notes || ''}</td>
-            <td>-</td>
-            <td class="action-cell"><i class="fas fa-times hide-hint-btn"></i></td>
-        `;
-        workoutBody.appendChild(row);
-    }
-
-    function updateRestCell(cell, item) {
-        if (item.isResting) {
-            cell.innerHTML = `<div class="timer-display">${item.restTime}s</div><button class="btn-stop-rest">停止</button>`;
-        } else {
-            cell.innerHTML = `<span>${item.restTime > 0 ? item.restTime + 's' : '--'}</span><button class="btn-start-rest">计时</button>`;
-        }
-    }
-
-    function addSet(actionName, options = {}) {
-        currentLog.push({
-            name: actionName, set: options.set || 1, weight: options.weight || '',
-            reps: options.reps || '', rpe: options.rpe || '', notes: options.notes || '',
-            restTime: 0, isResting: false
-        });
-        renderTable();
-    }
-
-    // --- 事件处理 ---
-    function handleTableClick(e) {
-        const target = e.target;
-        const row = target.closest('tr');
-        if (!row) return;
-
-        if (target.classList.contains('hide-hint-btn')) {
-            row.remove();
-            return;
-        }
-        
-        if (!row.dataset.index) return;
-        const index = parseInt(row.dataset.index);
-        const item = currentLog[index];
-
-        if (target.classList.contains('set-cell')) {
-            addSet(item.name, { set: item.set + 1, weight: item.weight, rpe: item.rpe, notes: item.notes });
-        } else if (target.classList.contains('delete-btn')) {
-            if (confirm(`确定要删除“${item.name}”的第 ${item.set} 组吗？`)) {
-                currentLog.splice(index, 1);
-                renderTable();
-            }
-        } else if (target.classList.contains('btn-start-rest')) {
-            clearInterval(restTimerInterval);
-            item.isResting = true;
-            item.restTime = 0;
-            restTimerInterval = setInterval(() => { item.restTime++; renderTable(); }, 1000);
-            renderTable();
-        } else if (target.classList.contains('btn-stop-rest')) {
-            clearInterval(restTimerInterval);
-            item.isResting = false;
-            renderTable();
-        }
-    }
-
-    function handleTableInputChange(e) {
-        const target = e.target;
-        const row = target.closest('tr');
-        if (!row || !row.dataset.index) return;
-        const index = parseInt(row.dataset.index);
-        const item = currentLog[index];
-        const classMap = { 'weight-input': 'weight', 'reps-input': 'reps', 'rpe-input': 'rpe', 'notes-input': 'notes' };
-        const key = classMap[target.className];
-        if (key) { item[key] = target.value; }
-        // 实时更新容量
-        if (key === 'weight' || key === 'reps') {
-            renderTable();
-        }
-        saveData();
-    }
-    
-    function handleFilterClick(e) {
-        if (e.target.classList.contains('filter-btn')) {
-            currentFilter = e.target.dataset.part;
-            renderFilterButtons();
-        }
-    }
-    
-    function handleActionSelect(e) {
-        if (e.target.classList.contains('action-item')) {
-            addSet(e.target.textContent);
-            actionModal.style.display = 'none';
-        }
-    }
-
-    // --- 智能提示逻辑 ---
+    // --- 智能提示 ---
     function findPerformanceRecords(actionName) {
-        let best = null;
-        let last = null;
-        let bestCapacity = 0;
-
+        let best = null, last = null, bestCapacity = 0;
         const sortedDates = Object.keys(workoutHistory).sort().reverse();
+        const currentDateKey = selectedDate.toISOString().slice(0, 10);
 
         for (const date of sortedDates) {
-            // 排除当前正在编辑的日期
-            if (date === selectedDate.toISOString().slice(0, 10)) continue;
-
-            const dayLog = workoutHistory[date].log;
-            for (const item of dayLog) {
+            if (date >= currentDateKey) continue; // 只查找过去的数据
+            for (const item of workoutHistory[date].log) {
                 if (item.name === actionName) {
+                    if (!last) last = { ...item, date };
                     const capacity = (item.weight && item.reps) ? parseFloat(item.weight) * parseInt(item.reps.split(',')[0]) : 0;
-                    if (!last) {
-                        last = { ...item, date }; // 找到的第一个就是最近的
-                    }
                     if (capacity > bestCapacity) {
                         bestCapacity = capacity;
                         best = { ...item, date };
@@ -264,107 +314,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return { best, last };
     }
 
-    // --- 日志功能 ---
-    function showLogModal() { renderLogList(); logModal.style.display = 'flex'; }
-    function renderLogList() { /* V5代码无变化 */ }
-    function handleLogItemClick(e) { /* V5代码无变化 */ }
-    function exportSelectedLogs() { /* V5代码无变化 */ }
-
-    // --- 动作库功能 ---
-    function showLibraryModal() {
-        renderLibraryList();
-        libraryModal.style.display = 'flex';
-    }
-
-    function renderLibraryList() {
-        libraryListContainer.innerHTML = '';
-        actionLibrary.forEach((action, index) => {
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'library-item';
-            itemDiv.dataset.index = index;
-            itemDiv.innerHTML = `
-                <div class="library-item-details">
-                    <span class="library-item-name">${action.name}</span>
-                    <span class="library-item-tags">标签: ${action.tags.join(', ') || '无'}</span>
-                </div>
-                <div class="library-item-actions">
-                    <button class="edit-btn"><i class="fas fa-edit"></i></button>
-                    <button class="delete-btn"><i class="fas fa-trash-alt"></i></button>
-                </div>
-            `;
-            libraryListContainer.appendChild(itemDiv);
-        });
-    }
-
-    function handleAddNewAction() {
-        const name = newActionNameInput.value.trim();
-        const tags = newActionTagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
-        if (!name) {
-            alert('动作名称不能为空！');
-            return;
-        }
-        if (addToActionLibrary({ name, tags })) {
-            actionLibrary = getActionLibrary();
-            newActionNameInput.value = '';
-            newActionTagsInput.value = '';
-            renderLibraryList();
-        } else {
-            alert('该动作已存在！');
-        }
-    }
-
-    function handleLibraryActions(e) {
-        const target = e.target.closest('button');
-        if (!target) return;
-        const itemDiv = target.closest('.library-item');
-        const index = parseInt(itemDiv.dataset.index);
-
-        if (target.classList.contains('delete-btn')) {
-            if (confirm(`确定要删除动作 "${actionLibrary[index].name}" 吗？`)) {
-                deleteFromActionLibrary(index);
-                actionLibrary = getActionLibrary();
-                renderLibraryList();
+    // --- 模态框逻辑 ---
+    function handleActionSelect(e) {
+        if (e.target.closest('.action-item')) {
+            const actionName = e.target.closest('.action-item').textContent;
+            if (!currentLog.some(log => log.name === actionName)) {
+                addSet(actionName, { set: 1 });
             }
-        } else if (target.classList.contains('edit-btn')) {
-            const action = actionLibrary[index];
-            const newName = prompt('输入新的动作名称:', action.name);
-            if (newName === null) return; // 用户取消
-            const newTags = prompt('输入新的标签 (用逗号分隔):', action.tags.join(','));
-            if (newTags === null) return;
-
-            updateActionInLibrary(index, {
-                name: newName.trim(),
-                tags: newTags.split(',').map(t => t.trim()).filter(Boolean)
-            });
-            actionLibrary = getActionLibrary();
-            renderLibraryList();
+            renderWorkoutModules();
+            actionModal.style.display = 'none';
         }
     }
     
-    function handleCSVImport(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const newLibrary = importLibraryFromCSV(e.target.result);
-            if (newLibrary) {
-                actionLibrary = newLibrary;
-                renderLibraryList();
-                alert('动作库导入成功！');
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = ''; // 清空input，以便下次还能触发change事件
-    }
-
-    // --- 数据导入导出 ---
-    function exportToCSV(dates) { /* V5代码无变化, 但表头需更新 */ }
-
-    // --- 渲染和通用函数 ---
-    function renderFilterButtons() { /* V5代码无变化 */ }
+    function handleFilterClick(e) { if (e.target.classList.contains('filter-btn')) { currentFilter = e.target.dataset.part; renderFilterButtons(); } }
     function renderActionList() {
         actionList.innerHTML = '';
-        // 从最新的库中渲染
         getActionLibrary().filter(action => currentFilter === 'all' || action.tags.includes(currentFilter))
         .forEach(action => {
             const div = document.createElement('div');
@@ -373,24 +337,19 @@ document.addEventListener('DOMContentLoaded', () => {
             actionList.appendChild(div);
         });
     }
-
-    // --- 本地存储 ---
-    function saveData() { localStorage.setItem('fitnessAppHistory', JSON.stringify(workoutHistory)); }
-    function loadData() {
-        const savedHistory = localStorage.getItem('fitnessAppHistory');
-        if (savedHistory) workoutHistory = JSON.parse(savedHistory);
-        const dateKey = selectedDate.toISOString().slice(0, 10);
-        if (workoutHistory[dateKey]) {
-            currentLog = workoutHistory[dateKey].log;
-            focusInput.value = workoutHistory[dateKey].focus || '';
-        } else {
-            workoutHistory[dateKey] = { focus: '', log: [] };
-            currentLog = workoutHistory[dateKey].log;
-            focusInput.value = '';
-        }
+    function renderFilterButtons() {
+        const parts = ['all', '胸', '背', '肩', '腿', '臂'];
+        modalFilterContainer.innerHTML = '';
+        parts.forEach(part => {
+            const btn = document.createElement('button');
+            btn.className = 'filter-btn';
+            btn.dataset.part = part;
+            btn.textContent = part === 'all' ? '全部' : part;
+            if (currentFilter === part) btn.classList.add('active');
+            modalFilterContainer.appendChild(btn);
+        });
     }
-    
-    // --- 重新实现V5中无变化的函数 ---
+
     function showLogModal() { renderLogList(); logModal.style.display = 'flex'; }
     function renderLogList() {
         logList.innerHTML = '';
@@ -414,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedDate = new Date(dateStr + 'T12:00:00');
             loadData();
             updateDateDisplay();
-            renderTable();
+            renderWorkoutModules();
             logModal.style.display = 'none';
         }
     }
@@ -434,10 +393,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (allLogs.length === 0) { alert('选中的日期没有训练记录可以导出。'); return; }
         let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "日期,训练重点,动作,组数,重量(kg),次数,容量(kg),RPE,备注,休息时间(s)\n";
+        csvContent += "日期,训练重点,动作,组数,重量,次数,RPE,备注,休息(s)\n";
         allLogs.forEach(item => {
-            const capacity = (item.weight && item.reps) ? (parseFloat(item.weight) * parseInt(item.reps.split(',')[0])) : 0;
-            const rowData = [ item.date, item.focus, item.name, item.set, item.weight, `"${item.reps}"`, capacity.toFixed(1), item.rpe, `"${item.notes}"`, item.restTime ].join(",");
+            const rowData = [ item.date, item.focus, item.name, item.set, item.weight, `"${item.reps}"`, item.rpe, `"${item.notes}"`, item.restTime ].join(",");
             csvContent += rowData + "\n";
         });
         const encodedUri = encodeURI(csvContent);
@@ -449,18 +407,84 @@ document.addEventListener('DOMContentLoaded', () => {
         link.click();
         document.body.removeChild(link);
     }
-    function renderFilterButtons() {
-        const parts = ['all', '胸', '背', '肩', '腿', '臂'];
-        modalFilterContainer.innerHTML = '';
-        parts.forEach(part => {
-            const btn = document.createElement('button');
-            btn.className = 'filter-btn';
-            btn.dataset.part = part;
-            btn.textContent = part === 'all' ? '全部' : part;
-            if (currentFilter === part) btn.classList.add('active');
-            modalFilterContainer.appendChild(btn);
+    
+    function showLibraryModal() { renderLibraryList(); libraryModal.style.display = 'flex'; }
+    function renderLibraryList() { /* V6 代码 */ }
+    function handleAddNewAction() { /* V6 代码 */ }
+    function handleLibraryActions(e) { /* V6 代码 */ }
+    function handleCSVImport(event) { /* V6 代码 */ }
+    
+    // --- 粘贴 V6 中未改变的动作库函数 ---
+    function renderLibraryList() {
+        libraryListContainer.innerHTML = '';
+        actionLibrary.forEach((action, index) => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'library-item';
+            itemDiv.dataset.index = index;
+            itemDiv.innerHTML = `<div class="library-item-details"><span class="library-item-name">${action.name}</span><span class="library-item-tags">标签: ${action.tags.join(', ') || '无'}</span></div><div class="library-item-actions"><button class="edit-btn"><i class="fas fa-edit"></i></button><button class="delete-btn"><i class="fas fa-trash-alt"></i></button></div>`;
+            libraryListContainer.appendChild(itemDiv);
         });
     }
+    function handleAddNewAction() {
+        const name = newActionNameInput.value.trim();
+        const tags = newActionTagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
+        if (!name) { alert('动作名称不能为空！'); return; }
+        if (addToActionLibrary({ name, tags })) {
+            actionLibrary = getActionLibrary();
+            newActionNameInput.value = '';
+            newActionTagsInput.value = '';
+            renderLibraryList();
+        } else { alert('该动作已存在！'); }
+    }
+    function handleLibraryActions(e) {
+        const target = e.target.closest('button');
+        if (!target) return;
+        const itemDiv = target.closest('.library-item');
+        const index = parseInt(itemDiv.dataset.index);
+        if (target.closest('.delete-btn')) {
+            if (confirm(`确定要删除动作 "${actionLibrary[index].name}" 吗？`)) {
+                deleteFromActionLibrary(index);
+                actionLibrary = getActionLibrary();
+                renderLibraryList();
+            }
+        } else if (target.closest('.edit-btn')) {
+            const action = actionLibrary[index];
+            const newName = prompt('输入新的动作名称:', action.name);
+            if (newName === null) return;
+            const newTags = prompt('输入新的标签 (用逗号分隔):', action.tags.join(','));
+            if (newTags === null) return;
+            updateActionInLibrary(index, { name: newName.trim(), tags: newTags.split(',').map(t => t.trim()).filter(Boolean) });
+            actionLibrary = getActionLibrary();
+            renderLibraryList();
+        }
+    }
+    function handleCSVImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const newLibrary = importLibraryFromCSV(e.target.result);
+            if (newLibrary) { actionLibrary = newLibrary; renderLibraryList(); alert('动作库导入成功！'); }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    }
 
+    // --- 数据存取 ---
+    function saveData() { localStorage.setItem('fitnessAppHistory', JSON.stringify(workoutHistory)); }
+    function loadData() {
+        const savedHistory = localStorage.getItem('fitnessAppHistory');
+        if (savedHistory) workoutHistory = JSON.parse(savedHistory);
+        const dateKey = selectedDate.toISOString().slice(0, 10);
+        if (workoutHistory[dateKey]) {
+            currentLog = workoutHistory[dateKey].log;
+            focusInput.value = workoutHistory[dateKey].focus || '';
+        } else {
+            workoutHistory[dateKey] = { focus: '', log: [] };
+            currentLog = workoutHistory[dateKey].log;
+            focusInput.value = '';
+        }
+    }
+    
     init();
 });

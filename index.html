@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>健身记录器 V6</title>
+    <title>健身记录器 V7</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
@@ -17,7 +17,6 @@
             <div class="header-buttons">
                 <button id="manage-library-btn">动作库</button>
                 <button id="view-log-btn">日志</button>
-                <button id="export-btn">导出本日</button>
             </div>
         </div>
         <div id="date-nav">
@@ -25,37 +24,18 @@
             <p id="current-date"></p>
             <button id="next-day-btn">后一天 &gt;</button>
         </div>
-        <div class="focus-container">
-            <label for="focus-input">本日重点:</label>
-            <input type="text" id="focus-input" placeholder="例如: 胸, 肩">
-        </div>
     </header>
 
-    <main>
-        <div class="table-wrapper">
-            <div class="table-container">
-                <table id="workout-table">
-                    <thead>
-                        <tr>
-                            <th>动作</th>
-                            <th>组数</th>
-                            <th>重量(kg)</th>
-                            <th>次数</th>
-                            <th>容量(kg)</th>
-                            <th>RPE</th>
-                            <th>备注</th>
-                            <th>休息(s)</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="workout-body"></tbody>
-                </table>
-            </div>
-        </div>
-    </main>
+    <main id="workout-container">
+        </main>
     
     <footer>
-        <p>健身记录器 V6 | Made with ❤️ by Gemini</p>
+        <p>健身记录器 V7 | Made with ❤️ by Gemini</p>
+        <div id="unit-switcher">
+            <label>单位: </label>
+            <button data-unit="kg" class="unit-btn active">kg</button>
+            <button data-unit="lbs" class="unit-btn">lbs</button>
+        </div>
     </footer>
 
     <button id="add-workout-btn">+</button>
@@ -88,8 +68,7 @@
                 <button onclick="document.getElementById('csv-import-input').click()">从 CSV 导入</button>
                 <input type="file" id="csv-import-input" accept=".csv" style="display: none;">
             </div>
-            <div id="library-list-container">
-                </div>
+            <div id="library-list-container"></div>
             <div class="add-action-form">
                 <h3>新增动作</h3>
                 <input type="text" id="new-action-name" placeholder="动作名称">

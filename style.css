@@ -1,4 +1,4 @@
-/* 全局样式 */
+/* --- 全局与头部 --- */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     margin: 0;
@@ -6,8 +6,6 @@ body {
     background-color: #f4f4f9;
     color: #333;
 }
-
-/* 头部 */
 header {
     background-color: #fff;
     padding: 15px 20px;
@@ -19,72 +17,149 @@ header {
 .header-content { display: flex; justify-content: space-between; align-items: center; }
 header h1 { margin: 0; font-size: 1.5em; }
 .header-buttons { display: flex; gap: 8px; }
-.header-buttons button {
-    border: 1px solid #007bff;
-    background-color: transparent;
-    color: #007bff;
-    padding: 8px 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    white-space: nowrap;
-    font-size: 0.9em;
-}
+.header-buttons button { border: 1px solid #007bff; background-color: transparent; color: #007bff; padding: 8px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 0.9em; }
 #date-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
 #date-nav button { background: none; border: none; color: #007bff; font-size: 1em; cursor: pointer; padding: 5px 10px; }
 #current-date { font-weight: bold; font-size: 1.1em; }
-.focus-container { margin-top: 15px; display: flex; align-items: center; gap: 10px; }
-#focus-input { flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
 
-/* 表格 */
-.table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 20px; }
-.table-container { min-width: 900px; }
-#workout-table { width: 100%; border-collapse: collapse; background-color: #fff; }
-#workout-table th, #workout-table td { border: 1px solid #eee; padding: 10px 4px; text-align: center; vertical-align: middle; }
-#workout-table th { background-color: #f8f9fa; font-size: 0.8em; color: #555; white-space: nowrap; padding: 12px 5px; }
-#workout-table input { width: 85%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 0.9em; }
-.set-cell { cursor: pointer; font-weight: bold; color: #007bff; }
-.set-cell:hover { background-color: #f0f8ff; }
-.capacity-cell { font-weight: bold; color: #28a745; }
-.rest-cell button { font-size: 0.8em; padding: 5px; border-radius: 6px; border: none; color: white; cursor: pointer; margin-left: 5px; }
-.rest-cell .btn-start-rest { background-color: #17a2b8; }
-.rest-cell .btn-stop-rest { background-color: #ffc107; }
-.rest-cell .timer-display { font-weight: bold; font-size: 0.9em; }
-.action-cell { width: 40px; }
-.action-cell .delete-btn, .action-cell .hide-hint-btn { color: #dc3545; cursor: pointer; font-size: 1.2em; }
-
-/* 表格提示行 */
-.hint-row td {
-    background-color: #f8f9fa;
+/* --- V7 核心：交互式动作模块 --- */
+main { padding: 10px; }
+.workout-module {
+    background-color: #fff;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    overflow: hidden; /* 关键：用于隐藏横向扩展内容 */
+}
+.focus-row-wrapper {
+    display: flex;
+    transition: transform 0.3s ease-in-out; /* 横向滑动动画 */
+}
+.focus-row-wrapper.expanded {
+    transform: translateX(-100%);
+}
+.focus-row, .details-row {
+    min-width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    padding: 12px;
+}
+/* 默认收缩行 */
+.focus-row {
+    gap: 8px;
+}
+.action-name {
+    font-weight: bold;
+    flex-grow: 1;
+    cursor: pointer;
+}
+.set-info {
+    font-size: 0.9em;
+    padding: 4px 8px;
+    background-color: #eee;
+    border-radius: 4px;
+}
+.reps-input {
+    width: 60px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+}
+.confirm-set-btn {
+    font-size: 1.2em;
+    color: #28a745;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+}
+.expand-btn {
+    font-size: 1.2em;
     color: #6c757d;
-    font-style: italic;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    transition: transform 0.3s;
+}
+.expand-btn.vertical.expanded {
+    transform: rotate(180deg);
+}
+/* 横向展开行 */
+.details-row {
+    gap: 8px;
+    background-color: #f8f9fa;
+}
+.details-row input {
+    width: 60px;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+}
+.details-row .notes-input {
+    width: 100px;
+}
+.rest-timer-btn, .delete-set-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5em;
+    padding: 5px;
+}
+.rest-timer-btn { color: #17a2b8; }
+.delete-set-btn { color: #dc3545; }
+
+/* 纵向展开区 */
+.sets-history-container {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out;
+    background-color: #fafafa;
+}
+.sets-history-container.expanded {
+    max-height: 500px; /* 一个足够大的值 */
+}
+.history-list {
+    padding: 0 12px 12px 12px;
     font-size: 0.9em;
 }
-.hint-row .hint-label { font-weight: bold; }
+.history-item, .hint-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+.hint-item {
+    color: #6c757d;
+    font-style: italic;
+}
+.history-item-label { font-weight: bold; }
 
-/* 底部添加按钮 */
-#add-workout-btn { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background-color: #007bff; color: white; font-size: 36px; line-height: 55px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; z-index: 99; }
+/* --- 页脚与单位切换 --- */
 footer { text-align: center; padding: 20px; margin-top: 30px; font-size: 0.8em; color: #999; }
+#unit-switcher { margin-top: 10px; }
+.unit-btn { background-color: #ddd; border: none; padding: 5px 15px; border-radius: 10px; cursor: pointer; }
+.unit-btn.active { background-color: #007bff; color: white; }
 
-/* 通用模态框 */
+/* --- 底部添加按钮 --- */
+#add-workout-btn { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background-color: #007bff; color: white; font-size: 36px; line-height: 55px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; z-index: 99; }
+
+/* --- 模态框 (从V6复制，基本无变化) --- */
 .modal-hidden { display: none; }
 .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 100; }
 .modal-content { background-color: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 500px; max-height: 85vh; display: flex; flex-direction: column; }
 .modal-content h2 { margin-top: 0; }
 .modal-content .close-btn { width: 100%; padding: 12px; margin-top: 15px; background-color: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer; }
-
-/* 动作选择模态框 */
 #modal-filter-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
 #modal-filter-container .filter-btn { border: 1px solid #ddd; background-color: #fff; padding: 5px 12px; border-radius: 15px; cursor: pointer; }
 #modal-filter-container .filter-btn.active { background-color: #007bff; color: white; }
 #action-list { flex-grow: 1; overflow-y: auto; }
 #action-list .action-item { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; }
-#action-list .action-item:hover { background-color: #f0f0f0; }
-
-/* 训练日志模态框 */
 #log-list { flex-grow: 1; overflow-y: auto; border-top: 1px solid #eee; border-bottom: 1px solid #eee; }
 .log-item { display: flex; align-items: center; padding: 12px 5px; border-bottom: 1px solid #eee; cursor: pointer; }
-.log-item:last-child { border-bottom: none; }
-.log-item:hover { background-color: #f0f8ff; }
 .log-item input[type="checkbox"] { margin-right: 15px; transform: scale(1.2); cursor: pointer; }
 .log-item-info { display: flex; flex-direction: column; pointer-events: none; }
 .log-item-info .date { font-weight: bold; }
@@ -92,20 +167,10 @@ footer { text-align: center; padding: 20px; margin-top: 30px; font-size: 0.8em; 
 .log-actions { display: flex; gap: 10px; margin-top: 15px; }
 .log-actions button { flex-grow: 1; padding: 12px; border: none; border-radius: 8px; color: white; cursor: pointer; }
 #export-selected-btn { background-color: #007bff; }
-
-/* 动作库管理模态框 */
-.library-actions { display: flex; gap: 10px; margin-bottom: 15px; }
+.library-actions, .add-action-form, #library-list-container, .library-item { /* 从V6复制 */ margin-bottom: 15px;}
+.library-actions { display: flex; gap: 10px; }
 .library-actions button { flex: 1; padding: 10px; border: 1px solid #007bff; background-color: #fff; color: #007bff; border-radius: 6px; cursor: pointer; }
-#library-list-container { max-height: 250px; overflow-y: auto; border: 1px solid #eee; margin-bottom: 15px; padding: 5px; }
+#library-list-container { max-height: 250px; overflow-y: auto; border: 1px solid #eee; padding: 5px; }
 .library-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; border-bottom: 1px solid #f0f0f0; }
-.library-item:last-child { border-bottom: none; }
-.library-item-details { display: flex; flex-direction: column; }
-.library-item-name { font-weight: bold; }
-.library-item-tags { font-size: 0.8em; color: #666; }
-.library-item-actions button { background: none; border: none; cursor: pointer; font-size: 1em; margin-left: 8px; }
-.library-item-actions .edit-btn { color: #ffc107; }
-.library-item-actions .delete-btn { color: #dc3545; }
-.add-action-form { margin-top: 10px; }
-.add-action-form h3 { margin: 0 0 10px 0; font-size: 1.1em; }
 .add-action-form input { width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
 #add-new-action-btn { width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; }
