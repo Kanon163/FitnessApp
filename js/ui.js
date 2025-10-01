@@ -18,19 +18,27 @@ class UIManager {
         document.getElementById('current-date-display').textContent = this.getFormattedDate(date);
     }
     
-    renderActionModule(action, setsToday, nextSetNumber, unit) {
+    renderActionModule(action, setsToday, nextSetNumber, defaultUnit) {
         const module = document.createElement('div');
         module.className = 'action-module';
         module.dataset.actionName = action.name;
+        module.setAttribute('draggable', true);
+
+        // 确定此模块的初始单位
+        const lastSetForThisAction = setsToday.length > 0 ? setsToday[setsToday.length - 1] : null;
+        const currentUnit = lastSetForThisAction ? lastSetForThisAction.unit : defaultUnit;
 
         module.innerHTML = `
             <div class="focus-row-wrapper">
                 <div class="focus-row-container">
                     <div class="focus-row">
+                        <div class="drag-handle" title="按住拖拽排序">⠿</div>
                         <span class="action-name">${action.name}</span>
-                        <div class="focus-row-main">
+                        <div class="focus-row-inputs">
                              <span class="set-counter">第 ${nextSetNumber} 组</span>
                              <input type="number" class="reps-input" placeholder="次数" inputmode="numeric">
+                             <input type="number" class="weight-input" placeholder="重量" inputmode="decimal">
+                             <button class="module-unit-toggle">${currentUnit.toUpperCase()}</button>
                         </div>
                         <div class="action-buttons">
                             <button class="confirm-btn">✓</button>
@@ -42,7 +50,6 @@ class UIManager {
                     </div>
                     <div class="details-area">
                         <button class="back-btn">⬅</button>
-                        <input type="number" class="weight-input" placeholder="${unit}" inputmode="decimal">
                         <input type="number" class="rpe-input" placeholder="RPE" inputmode="numeric">
                         <input type="text" class="notes-input" placeholder="备注">
                         <button class="timer-btn">⏱</button>
@@ -55,7 +62,7 @@ class UIManager {
                 <div class="history-tip" data-type="last">上次训练: 无记录</div>
                 <h4 class="today-sets-header ${setsToday.length > 0 ? '' : 'hidden'}">今日已完成:</h4>
                 <div class="today-set-list">
-                    ${setsToday.map((set, index) => this.createSetItemHTML(set, index + 1, unit)).join('')}
+                    ${setsToday.map((set, index) => this.createSetItemHTML(set, index + 1)).join('')}
                 </div>
             </div>
         `;
@@ -63,10 +70,10 @@ class UIManager {
         return module;
     }
     
-    createSetItemHTML(set, setNumber, unit) {
+    createSetItemHTML(set, setNumber) {
         return `
             <div class="set-item" data-set-id="${set.id}">
-                <span><strong>第${setNumber}组:</strong> ${set.reps} 次 @ ${set.weight || '自重'} ${set.weight ? unit : ''}</span>
+                <span><strong>第${setNumber}组:</strong> ${set.reps} 次 @ ${set.weight || '自重'} ${set.weight ? set.unit : ''}</span>
                 <span>${set.rpe ? `RPE:${set.rpe}` : ''} ${set.notes ? `(${set.notes})` : ''}</span>
             </div>
         `;

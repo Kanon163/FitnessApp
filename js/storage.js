@@ -28,7 +28,10 @@ class StorageManager {
 
     // --- Settings ---
     getSettings() {
-        const defaultSettings = { unit: 'kg' };
+        const defaultSettings = { 
+            defaultUnit: 'kg',
+            theme: 'dark' // 'dark' or 'light'
+        };
         const settings = this._getData(this.keys.settings);
         return { ...defaultSettings, ...settings };
     }
