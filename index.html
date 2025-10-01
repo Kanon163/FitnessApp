@@ -3,90 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>健身记录器 V7</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>健身记录器</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#007bff">
+    <meta name="theme-color" content="#333"/>
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
 </head>
 <body>
 
-    <header>
-        <div class="header-content">
-            <h1>我的训练</h1>
-            <div class="header-buttons">
-                <button id="manage-library-btn">动作库</button>
-                <button id="view-log-btn">日志</button>
-            </div>
+    <header class="app-header">
+        <div class="header-left">
+            <h1 id="current-date-display"></h1>
         </div>
-        <div id="date-nav">
-            <button id="prev-day-btn">&lt; 前一天</button>
-            <p id="current-date"></p>
-            <button id="next-day-btn">后一天 &gt;</button>
+        <div class="header-right">
+            <button id="log-btn" class="header-btn">日志</button>
+            <button id="library-btn" class="header-btn">动作库</button>
         </div>
     </header>
 
-    <main id="workout-container">
+    <main id="main-content" class="main-content">
         </main>
-    
-    <footer>
-        <p>健身记录器 V7 | Made with ❤️ by Gemini</p>
-        <div id="unit-switcher">
-            <label>单位: </label>
-            <button data-unit="kg" class="unit-btn active">kg</button>
-            <button data-unit="lbs" class="unit-btn">lbs</button>
+
+    <div class="main-actions">
+        <button id="add-action-btn" class="add-action-btn">添加今日训练动作</button>
+    </div>
+
+    <footer class="app-footer">
+        <div class="settings">
+            <span>单位:</span>
+            <button id="unit-toggle-btn" class="unit-toggle">KG</button>
+        </div>
+        <div class="pwa-install">
+             <button id="pwa-install-btn" style="display: none;">安装应用</button>
         </div>
     </footer>
 
-    <button id="add-workout-btn">+</button>
+    <div id="modal-container"></div>
 
-    <div id="action-modal" class="modal modal-hidden">
-        <div class="modal-content">
-            <h2>选择一个动作</h2>
-            <div id="modal-filter-container"></div>
-            <div id="action-list"></div>
-            <button id="close-action-modal-btn" class="close-btn">关闭</button>
-        </div>
-    </div>
-
-    <div id="log-modal" class="modal modal-hidden">
-        <div class="modal-content">
-            <h2>训练日志 (点击日期跳转)</h2>
-            <div id="log-list"></div>
-            <div class="log-actions">
-                <button id="export-selected-btn">导出选中记录</button>
-                <button id="close-log-modal-btn" class="close-btn">关闭</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="library-modal" class="modal modal-hidden">
-        <div class="modal-content">
-            <h2>管理动作库</h2>
-            <div class="library-actions">
-                <button id="export-library-btn">导出为 CSV</button>
-                <button onclick="document.getElementById('csv-import-input').click()">从 CSV 导入</button>
-                <input type="file" id="csv-import-input" accept=".csv" style="display: none;">
-            </div>
-            <div id="library-list-container"></div>
-            <div class="add-action-form">
-                <h3>新增动作</h3>
-                <input type="text" id="new-action-name" placeholder="动作名称">
-                <input type="text" id="new-action-tags" placeholder="标签,用逗号分隔">
-                <button id="add-new-action-btn">添加</button>
-            </div>
-            <button id="close-library-modal-btn" class="close-btn">完成</button>
-        </div>
-    </div>
-
+    <script src="js/storage.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
     <script>
+        // 注册 Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => console.log('SW registered'), err => console.log('SW registration failed: ', err));
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => console.log('Service Worker 注册成功:', registration))
+                    .catch(error => console.log('Service Worker 注册失败:', error));
             });
         }
     </script>
-    <script src="action-library.js"></script>
-    <script src="script.js"></script>
 </body>
 </html>

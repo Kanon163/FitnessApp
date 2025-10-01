@@ -1,21 +1,22 @@
 {
   "name": "健身记录器",
   "short_name": "健身记录",
-  "start_url": ".",
+  "description": "一款轻量级的健身日志应用，用于记录训练和追踪进步。",
+  "start_url": "/index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#007bff",
-  "description": "一个为你定制的健身记录应用。",
+  "background_color": "#121212",
+  "theme_color": "#1e1e1e",
+  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
     },
     {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
     }
   ]
 }
