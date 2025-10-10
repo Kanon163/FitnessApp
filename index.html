@@ -3,56 +3,1309 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>健身记录器</title>
-    <link rel="stylesheet" href="style.css">
+    <title>健身伙伴</title>
+    <meta name="description" content="您的智能健身日志，将训练历史转化为可行动的洞察。">
+    <meta name="theme-color" content="#1a1a1a"/>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1e1e1e"/>
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <style>
+        /* CSS 样式 */
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-color: #1f2329;
+            --subtext-color: #646a73;
+            --border-color: #e1e4e8;
+            --primary-color: #007aff;
+            --primary-hover: #0056b3;
+            --danger-color: #dc3545;
+            --success-color: #28a745;
+            --input-bg: #f6f8fa;
+        }
+
+        body.dark-mode {
+            --bg-color: #0d1117;
+            --card-bg: #161b22;
+            --text-color: #c9d1d9;
+            --subtext-color: #8b949e;
+            --border-color: #30363d;
+            --primary-color: #1f6feb;
+            --primary-hover: #388bfd;
+            --input-bg: #010409;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overscroll-behavior-y: contain;
+        }
+
+        body { display: flex; flex-direction: column; height: 100vh; }
+        
+        /* 全局头部 */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky; top: 0; z-index: 100;
+        }
+        .date-navigator { display: flex; align-items: center; gap: 10px; }
+        .date-display { font-weight: 600; font-size: 1.1em; }
+        .header-actions button { margin-left: 10px; }
+
+        /* 主内容区域 */
+        main {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        .page { display: none; }
+        .page.active { display: block; }
+        #record-page-content, #analysis-page-content {
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        
+        /* 底部导航 */
+        .app-footer {
+            display: flex;
+            justify-content: space-around;
+            padding: 5px 0;
+            background-color: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            position: sticky; bottom: 0;
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-grow: 1;
+            padding: 5px 0;
+            cursor: pointer;
+            border-top: 3px solid transparent;
+            color: var(--subtext-color);
+        }
+        .nav-item.active {
+            color: var(--primary-color);
+            border-top-color: var(--primary-color);
+        }
+        .nav-item svg { width: 24px; height: 24px; }
+        .nav-item span { font-size: 0.75em; }
+
+        /* 动作模块 */
+        .action-module {
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .action-module-main { position: relative; width: 100%; }
+        .action-module-slider { display: flex; width: 200%; transition: transform 0.3s ease; }
+        
+        .focus-row, .secondary-row {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            width: 50%;
+        }
+
+        .action-name { font-weight: 600; cursor: pointer; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .action-set-count {
+            background: var(--bg-color);
+            color: var(--subtext-color);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            margin: 0 10px;
+        }
+        .focus-row input[type="number"] {
+            width: 60px;
+            text-align: center;
+            margin: 0 5px;
+        }
+        .unit-toggle { min-width: 45px; padding: 6px 4px; }
+        .btn-icon { background: none; border: none; cursor: pointer; color: var(--subtext-color); padding: 5px; }
+        .btn-icon svg { width: 20px; height: 20px; display: block; }
+        .btn-confirm-set { color: var(--success-color); }
+
+        .secondary-row {
+            background: var(--bg-color);
+            justify-content: space-around;
+        }
+        .secondary-row .rpe-input, .secondary-row .notes-input { width: 50px; }
+        .btn-delete-set { color: var(--danger-color); }
+
+        .module-details {
+            display: none;
+            padding: 0 12px 12px;
+            border-top: 1px solid var(--border-color);
+        }
+        .module-details.visible { display: block; }
+        .past-data { display: flex; justify-content: space-around; margin-bottom: 10px; font-size: 0.9em; color: var(--subtext-color); }
+        .set-log-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+        .set-log-item { display: flex; justify-content: space-between; padding: 5px; border-radius: 4px; background: var(--bg-color); }
+
+        /* 分析页面 */
+        .chart-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .chart-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .chart-card-title { font-weight: 600; }
+        .empty-state { text-align: center; padding: 40px; color: var(--subtext-color); }
+
+        /* 模态框 */
+        .modal {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal.visible { display: flex; }
+        .modal-content {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .modal-title { font-size: 1.2em; font-weight: 600; }
+        .modal-body { overflow-y: auto; flex-grow: 1; }
+        .modal-footer { margin-top: 15px; text-align: right; }
+        
+        /* 表单元素 */
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
+        input[type="text"], input[type="number"], select, textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
+            color: var(--text-color);
+            font-size: 1em;
+        }
+        .tag-input-container { position: relative; }
+        .tag-suggestions {
+            position: absolute;
+            top: 100%; left: 0; right: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0 0 6px 6px;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+        .tag-suggestion-item { padding: 10px; cursor: pointer; }
+        .tag-suggestion-item:hover { background-color: var(--bg-color); }
+        .selected-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .tag-badge { background-color: var(--primary-color); color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; display: flex; align-items: center; gap: 4px; }
+        .tag-badge .remove-tag { cursor: pointer; }
+
+        /* 通用组件 */
+        .btn {
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 1em;
+        }
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-color); color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-full-width { width: 100%; }
+        .btn-add-circle {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2em;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: none;
+            cursor: pointer;
+            z-index: 50;
+        }
+
+        .log-history-item {
+            display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border-color);
+        }
+        .log-history-item:last-child { border-bottom: none; }
+        .log-history-item-date { font-weight: 500; cursor: pointer; }
+    </style>
 </head>
 <body>
 
     <header class="app-header">
-        <div class="header-left">
-            <h1 id="current-date-display"></h1>
+        <div class="date-navigator">
+            <button id="prev-day-btn" class="btn-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"></path></svg>
+            </button>
+            <span id="date-display" class="date-display"></span>
+            <button id="next-day-btn" class="btn-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"></path></svg>
+            </button>
         </div>
-        <div class="header-right">
-            <button id="log-btn" class="header-btn">日志</button>
-            <button id="library-btn" class="header-btn">动作库</button>
+        <div class="header-actions">
+            <button id="action-library-btn" class="btn-icon" title="动作库">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-3 9h-2.5v2.5h-3V11H8V8h2.5V5.5h3V8H16v3z"></path></svg>
+            </button>
+            <button id="history-log-btn" class="btn-icon" title="训练日志">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7v-5z"></path></svg>
+            </button>
         </div>
     </header>
 
-    <main id="main-content" class="main-content">
-        </main>
+    <main>
+        <section id="record-page" class="page active">
+            <div id="record-page-content">
+                </div>
+            <button id="add-action-btn" class="btn-add-circle">+</button>
+        </section>
 
-    <div class="main-actions">
-        <button id="add-action-btn" class="add-action-btn">添加今日训练动作</button>
-    </div>
+        <section id="analysis-page" class="page">
+            <div id="analysis-page-content">
+                </div>
+            <button id="add-chart-btn" class="btn-add-circle">+</button>
+        </section>
+    </main>
 
     <footer class="app-footer">
-        <div class="settings">
-            <button id="theme-toggle-btn" class="icon-btn">🌙</button>
-            <span>默认单位:</span>
-            <button id="default-unit-toggle-btn" class="unit-toggle">KG</button>
+        <div class="nav-item active" data-page="record-page">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM6.5 9L10 5.5 13.5 9H11v4H9V9H6.5zm11 6L14 18.5 10.5 15H13v-4h2v4h2.5z"></path></svg>
+            <span>记录</span>
         </div>
-        <div class="pwa-install">
-             <button id="pwa-install-btn" style="display: none;">安装应用</button>
+        <div class="nav-item" data-page="analysis-page">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"></path></svg>
+            <span>分析</span>
+        </div>
+        <div id="theme-toggle-btn" class="nav-item">
+            <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM20 13h-2.07c.05.33.07.66.07 1 0 .34-.02.67-.07 1H20v-2zm-9 7c-.34 0-.67-.02-1-.07V22h2v-2.07c-.33.05-.66.07-1 .07zM12 5c.34 0 .67.02 1 .07V3h-2v2.07c.33-.05.66-.07 1 .07zM4 13H1.93c.05.33.07.66.07 1 0 .34-.02.67-.07 1H4v-2zm7-2c-1.65 0-3 1.35-3 3s1.35 3 3 3 3-1.35 3-3-1.35-3-3-3zM6.34 7.76L7.76 6.34C8.45 5.65 9.24 5.12 10.12 4.75L9.17 3.8c-1.11.45-2.11 1.14-2.83 1.86l-.01.01zm11.32 11.32l-1.42 1.42c-.69.69-1.58 1.22-2.54 1.56l.95.95c1.11-.45 2.11-1.14 2.83-1.86l.01-.01zM17.66 7.76c.69-.69 1.22-1.58 1.56-2.54l-.95-.95c-.45 1.11-1.14 2.11-1.86 2.83l-1.42-1.42zM7.76 17.66c-.69.69-1.22 1.58-1.56 2.54l.95.95c.45-1.11 1.14-2.11 1.86-2.83l1.42 1.42z"></path></svg>
+            <svg id="theme-icon-moon" style="display:none;" viewBox="0 0 24 24" fill="currentColor"><path d="M9.37 5.51A7.35 7.35 0 009 6c0 4.42 3.58 8 8 8 .34 0 .68-.02 1.01-.07C16.92 18.91 14.15 22 10.5 22 5.26 22 1 17.74 1 12.5S5.26 3 10.5 3c1.55 0 3 .35 4.33.99l-5.46 1.52z"></path></svg>
+            <span id="theme-text"></span>
         </div>
     </footer>
 
     <div id="modal-container"></div>
+    
+    <noscript>
+        <div style="text-align: center; padding: 20px;">
+            <h1>请启用JavaScript</h1>
+            <p>此应用程序需要JavaScript才能正常运行。</p>
+        </div>
+    </noscript>
 
-    <script src="js/storage.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/app.js"></script>
     <script>
-        // 注册 Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => console.log('Service Worker 注册成功:', registration))
-                    .catch(error => console.log('Service Worker 注册失败:', error));
-            });
-        }
+    // JavaScript 逻辑
+    document.addEventListener('DOMContentLoaded', () => {
+
+        const App = {
+            // 状态管理模块
+            state: {
+                currentDate: new Date(),
+                activePage: 'record-page',
+                charts: {}, // 存储Chart.js实例
+            },
+
+            // 数据层模块 (与 localStorage 交互)
+            db: {
+                getWorkoutHistory() {
+                    return JSON.parse(localStorage.getItem('workoutHistory')) || {};
+                },
+                saveWorkoutHistory(data) {
+                    localStorage.setItem('workoutHistory', JSON.stringify(data));
+                },
+                getActionLibrary() {
+                    return JSON.parse(localStorage.getItem('actionLibrary')) || [];
+                },
+                saveActionLibrary(data) {
+                    localStorage.setItem('actionLibrary', JSON.stringify(data));
+                },
+                getSettings() {
+                    return JSON.parse(localStorage.getItem('fitnessAppSettings')) || { theme: 'light', actionUnits: {} };
+                },
+                saveSettings(data) {
+                    localStorage.setItem('fitnessAppSettings', JSON.stringify(data));
+                },
+                getDashboard() {
+                    return JSON.parse(localStorage.getItem('fitnessAppDashboard')) || [];
+                },
+                saveDashboard(data) {
+                    localStorage.setItem('fitnessAppDashboard', JSON.stringify(data));
+                }
+            },
+
+            // 界面渲染模块
+            ui: {
+                // ... (所有UI渲染函数)
+                initTheme() {
+                    const settings = App.db.getSettings();
+                    this.updateTheme(settings.theme);
+                },
+
+                updateTheme(theme) {
+                    const body = document.body;
+                    const sunIcon = document.getElementById('theme-icon-sun');
+                    const moonIcon = document.getElementById('theme-icon-moon');
+                    const themeText = document.getElementById('theme-text');
+                    
+                    if (theme === 'dark') {
+                        body.classList.add('dark-mode');
+                        sunIcon.style.display = 'none';
+                        moonIcon.style.display = 'block';
+                        themeText.textContent = '白天';
+                    } else {
+                        body.classList.remove('dark-mode');
+                        sunIcon.style.display = 'block';
+                        moonIcon.style.display = 'none';
+                        themeText.textContent = '黑夜';
+                    }
+                    
+                    // 销毁并重绘图表以适应主题变化
+                    if (App.state.activePage === 'analysis-page') {
+                       App.ui.renderAnalysisPage();
+                    }
+                },
+                
+                renderDate() {
+                    const dateDisplay = document.getElementById('date-display');
+                    const today = new Date();
+                    const currentDate = App.state.currentDate;
+                    
+                    if (currentDate.toDateString() === today.toDateString()) {
+                        dateDisplay.textContent = '今天';
+                    } else {
+                        dateDisplay.textContent = currentDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+                    }
+                },
+                
+                renderRecordPage() {
+                    const content = document.getElementById('record-page-content');
+                    content.innerHTML = '';
+                    const dateKey = App.utils.getDateKey(App.state.currentDate);
+                    const history = App.db.getWorkoutHistory();
+                    const dayData = history[dateKey] || [];
+
+                    if (dayData.length === 0) {
+                        content.innerHTML = '<div class="empty-state">今天还没有训练记录。<br>点击右下角“+”添加第一个动作。</div>';
+                    } else {
+                        dayData.forEach((action, index) => {
+                            content.insertAdjacentHTML('beforeend', this.createActionModuleHTML(action, index));
+                        });
+                    }
+                },
+                
+                createActionModuleHTML(actionData, actionIndex) {
+                    const settings = App.db.getSettings();
+                    const unit = settings.actionUnits?.[actionData.name] || 'kg';
+                    const lastLog = actionData.logs[actionData.logs.length - 1] || { weight: '', reps: '' };
+                    
+                    const setLogsHTML = actionData.logs.map((log, logIndex) => `
+                        <li class="set-log-item" data-action-index="${actionIndex}" data-log-index="${logIndex}">
+                            <span>第 ${logIndex + 1} 组: ${log.weight || 0} ${log.unit} × ${log.reps || 0} 次</span>
+                            <span>RPE: ${log.rpe || '-'}, 备注: ${log.notes || '-'}</span>
+                            <button class="btn-icon btn-delete-set" title="删除此组">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+                            </button>
+                        </li>
+                    `).join('');
+
+                    const { bestSet, lastWorkout } = App.utils.getHistoricalData(actionData.name);
+
+                    return `
+                    <div class="action-module" data-action-index="${actionIndex}" data-action-name="${actionData.name}">
+                        <div class="action-module-main">
+                            <div class="action-module-slider">
+                                <div class="focus-row">
+                                    <span class="action-name">${actionData.name}</span>
+                                    <span class="action-set-count">${actionData.logs.length}组</span>
+                                    <input type="number" class="weight-input" placeholder="重量" value="${lastLog.weight}">
+                                    <button class="btn btn-secondary unit-toggle" data-action-name="${actionData.name}">${unit}</button>
+                                    <input type="number" class="reps-input" placeholder="次数" value="${lastLog.reps}">
+                                    <button class="btn-icon btn-confirm-set" title="确认本组">
+                                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>
+                                    </button>
+                                    <button class="btn-icon toggle-details" title="查看历史">
+                                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
+                                    </button>
+                                    <button class="btn-icon toggle-secondary" title="更多选项">
+                                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 17l5-5-5-5v10z"></path></svg>
+                                    </button>
+                                </div>
+                                <div class="secondary-row">
+                                    RPE: <input type="number" class="rpe-input" placeholder="8">
+                                    备注: <input type="text" class="notes-input" placeholder="感觉不错">
+                                    <button class="btn-icon" title="休息计时"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"></path></svg></button>
+                                    <button class="btn-icon btn-delete-action" title="删除动作">
+                                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="module-details">
+                            <div class="past-data">
+                                <span>历史最佳: ${bestSet}</span>
+                                <span>上次训练: ${lastWorkout}</span>
+                            </div>
+                            <ul class="set-log-list">${setLogsHTML}</ul>
+                        </div>
+                    </div>
+                    `;
+                },
+
+                renderAnalysisPage() {
+                    const content = document.getElementById('analysis-page-content');
+                    const dashboardConfig = App.db.getDashboard();
+                    content.innerHTML = '';
+                    
+                    // 销毁旧图表实例
+                    Object.values(App.state.charts).forEach(chart => chart.destroy());
+                    App.state.charts = {};
+
+                    if (dashboardConfig.length === 0) {
+                        content.innerHTML = '<div class="empty-state">还没有分析图表。<br>点击右下角“+”创建第一个。</div>';
+                        return;
+                    }
+
+                    dashboardConfig.forEach((config, index) => {
+                        const cardId = `chart-card-${index}`;
+                        content.insertAdjacentHTML('beforeend', `
+                            <div class="chart-card" id="${cardId}" data-dashboard-index="${index}">
+                                <div class="chart-card-header">
+                                    <span class="chart-card-title">${config.type === 'action' ? '动作' : '标签'}: ${config.value}</span>
+                                    <button class="btn-icon btn-delete-chart" title="删除图表">
+                                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+                                    </button>
+                                </div>
+                                <canvas id="chart-${index}"></canvas>
+                            </div>
+                        `);
+                        this.renderChart(index, config);
+                    });
+                },
+
+                renderChart(index, config) {
+                    const canvas = document.getElementById(`chart-${index}`);
+                    if (!canvas) return;
+                    const ctx = canvas.getContext('2d');
+                    const data = App.utils.getChartData(config);
+                    const settings = App.db.getSettings();
+                    const isDarkMode = settings.theme === 'dark';
+                    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                    const textColor = isDarkMode ? '#c9d1d9' : '#1f2329';
+                    
+                    let chartConfig;
+                    if (config.type === 'action') {
+                        chartConfig = {
+                            type: 'bar',
+                            data: {
+                                labels: data.labels,
+                                datasets: [
+                                    {
+                                        label: '总容量 (kg)',
+                                        data: data.volumes,
+                                        backgroundColor: 'rgba(31, 111, 235, 0.6)',
+                                        borderColor: 'rgba(31, 111, 235, 1)',
+                                        borderWidth: 1,
+                                        yAxisID: 'yVolume',
+                                    },
+                                    {
+                                        label: '最大重量 (kg)',
+                                        data: data.maxWeights,
+                                        type: 'line',
+                                        borderColor: 'rgba(255, 159, 64, 1)',
+                                        backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                                        tension: 0.1,
+                                        yAxisID: 'yWeight',
+                                    }
+                                ]
+                            },
+                            options: {
+                                scales: {
+                                    x: { type: 'time', time: { unit: 'day' }, grid: { color: gridColor }, ticks: { color: textColor } },
+                                    yVolume: { type: 'linear', position: 'left', title: { display: true, text: '总容量', color: textColor }, grid: { color: gridColor }, ticks: { color: textColor } },
+                                    yWeight: { type: 'linear', position: 'right', title: { display: true, text: '最大重量', color: textColor }, grid: { drawOnChartArea: false }, ticks: { color: textColor } }
+                                },
+                                plugins: { legend: { labels: { color: textColor } } }
+                            }
+                        };
+                    } else { // tag
+                        chartConfig = {
+                            type: 'bar',
+                            data: {
+                                labels: data.labels,
+                                datasets: [{
+                                    label: `标签'${config.value}'总容量 (kg)`,
+                                    data: data.volumes,
+                                    backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                                    borderColor: 'rgba(40, 167, 69, 1)',
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                scales: {
+                                    x: { type: 'time', time: { unit: 'day' }, grid: { color: gridColor }, ticks: { color: textColor } },
+                                    y: { title: { display: true, text: '总容量 (kg)', color: textColor }, grid: { color: gridColor }, ticks: { color: textColor } }
+                                },
+                                plugins: { legend: { labels: { color: textColor } } }
+                            }
+                        };
+                    }
+                    
+                    App.state.charts[index] = new Chart(ctx, chartConfig);
+                },
+
+                showModal(id, title, content) {
+                    const modalContainer = document.getElementById('modal-container');
+                    modalContainer.innerHTML = `
+                        <div id="${id}" class="modal visible">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h2 class="modal-title">${title}</h2>
+                                    <button class="btn-icon close-modal" title="关闭">
+                                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+                                    </button>
+                                </div>
+                                <div class="modal-body">${content}</div>
+                            </div>
+                        </div>
+                    `;
+                },
+
+                hideModal() {
+                    const modalContainer = document.getElementById('modal-container');
+                    modalContainer.innerHTML = '';
+                },
+
+                renderActionLibraryModal(isForSelection = false, onSelect) {
+                    const library = App.db.getActionLibrary();
+                    const listHTML = library.map((action, index) => `
+                        <div class="log-history-item">
+                            <span>${action.name} <small style="color:var(--subtext-color)">${action.tags.join(', ')}</small></span>
+                            <div>
+                                ${isForSelection 
+                                    ? `<button class="btn btn-secondary select-action-btn" data-action-name="${action.name}">选择</button>`
+                                    : `<button class="btn-icon edit-action-btn" data-index="${index}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button>`
+                                }
+                            </div>
+                        </div>
+                    `).join('');
+
+                    const title = isForSelection ? '选择一个动作' : '动作库管理';
+                    const footer = isForSelection ? '' : `
+                        <div class="modal-footer">
+                            <button id="add-new-action-btn" class="btn btn-primary">新增动作</button>
+                            <button id="import-actions-btn" class="btn btn-secondary">导入CSV</button>
+                            <button id="export-actions-btn" class="btn btn-secondary">导出CSV</button>
+                        </div>`;
+                    
+                    this.showModal('action-library-modal', title, `
+                        <div>${listHTML}</div>
+                        ${footer}
+                    `);
+
+                    if (onSelect) {
+                        document.querySelectorAll('.select-action-btn').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                onSelect(e.target.dataset.actionName);
+                                this.hideModal();
+                            });
+                        });
+                    }
+                },
+
+                renderActionFormModal(action = { name: '', tags: [] }, index = -1) {
+                    const title = index === -1 ? '新增动作' : '编辑动作';
+                    this.showModal('action-form-modal', title, `
+                        <div class="form-group">
+                            <label for="action-name-input">动作名称</label>
+                            <input type="text" id="action-name-input" value="${action.name}" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="action-tags-input">标签 (用逗号分隔)</label>
+                            <div class="tag-input-container">
+                                <input type="text" id="action-tags-input" placeholder="例如: 胸,推,上肢">
+                                <div class="tag-suggestions" style="display:none;"></div>
+                            </div>
+                            <div class="selected-tags" id="selected-tags-container"></div>
+                        </div>
+                        <div class="modal-footer">
+                            ${index > -1 ? `<button id="delete-action-from-lib-btn" class="btn" style="color:var(--danger-color); float: left;">删除动作</button>`: ''}
+                            <button id="save-action-btn" class="btn btn-primary">保存</button>
+                        </div>
+                    `);
+                    
+                    // 初始化标签
+                    const tagsInput = document.getElementById('action-tags-input');
+                    const selectedTagsContainer = document.getElementById('selected-tags-container');
+                    let currentTags = [...action.tags];
+
+                    const renderTags = () => {
+                        selectedTagsContainer.innerHTML = currentTags.map(tag => `
+                            <span class="tag-badge">${tag} <span class="remove-tag" data-tag="${tag}">&times;</span></span>
+                        `).join('');
+                    };
+                    renderTags();
+
+                    tagsInput.addEventListener('keyup', (e) => {
+                        if (e.key === ',' || e.key === 'Enter') {
+                            const newTags = e.target.value.split(',').map(t => t.trim()).filter(t => t && !currentTags.includes(t));
+                            currentTags.push(...newTags);
+                            e.target.value = '';
+                            renderTags();
+                            document.querySelector('.tag-suggestions').style.display = 'none';
+                        }
+                    });
+
+                    document.body.addEventListener('click', (e) => {
+                         if (e.target.classList.contains('remove-tag')) {
+                            currentTags = currentTags.filter(t => t !== e.target.dataset.tag);
+                            renderTags();
+                        }
+                    });
+                    
+                    document.getElementById('save-action-btn').onclick = () => {
+                        // 添加输入框里剩余的标签
+                        const remainingTag = tagsInput.value.trim();
+                        if (remainingTag && !currentTags.includes(remainingTag)) {
+                            currentTags.push(remainingTag);
+                        }
+
+                        const newAction = {
+                            name: document.getElementById('action-name-input').value.trim(),
+                            tags: currentTags
+                        };
+                        if (!newAction.name) {
+                            alert('动作名称不能为空！');
+                            return;
+                        }
+                        
+                        App.events.handleSaveAction(newAction, index, action.name);
+                    };
+
+                    if (index > -1) {
+                        document.getElementById('delete-action-from-lib-btn').onclick = () => App.events.handleDeleteActionFromLib(index, action.name);
+                    }
+                },
+                
+                renderHistoryLogModal() {
+                    const history = App.db.getWorkoutHistory();
+                    const sortedDates = Object.keys(history).sort((a, b) => new Date(b) - new Date(a));
+
+                    const listHTML = sortedDates.map(dateKey => `
+                        <div class="log-history-item">
+                            <label style="display: flex; align-items: center; gap: 10px; flex-grow:1;">
+                                <input type="checkbox" class="history-checkbox" value="${dateKey}">
+                                <span class="log-history-item-date" data-date="${dateKey}">${new Date(dateKey).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                            </label>
+                        </div>
+                    `).join('');
+
+                    this.showModal('history-log-modal', '训练日志', `
+                        <div>${listHTML}</div>
+                        <div class="modal-footer">
+                            <button id="export-selected-logs-btn" class="btn btn-primary">导出选中项为CSV</button>
+                        </div>
+                    `);
+                },
+                
+                renderAddChartModal() {
+                    const actions = App.db.getActionLibrary().map(a => `<option value="${a.name}">${a.name}</option>`).join('');
+                    const allTags = [...new Set(App.db.getActionLibrary().flatMap(a => a.tags))];
+                    const tags = allTags.map(t => `<option value="${t}">${t}</option>`).join('');
+
+                    this.showModal('add-chart-modal', '创建新图表', `
+                        <div class="form-group">
+                            <label for="chart-type-select">图表类型</label>
+                            <select id="chart-type-select">
+                                <option value="action">按动作追踪</option>
+                                <option value="tag">按标签追踪</option>
+                            </select>
+                        </div>
+                        <div id="action-selector-group" class="form-group">
+                            <label for="action-select">选择动作</label>
+                            <select id="action-select">${actions}</select>
+                        </div>
+                        <div id="tag-selector-group" class="form-group" style="display:none;">
+                            <label for="tag-select">选择标签</label>
+                            <select id="tag-select">${tags}</select>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="create-chart-btn" class="btn btn-primary">创建</button>
+                        </div>
+                    `);
+
+                    document.getElementById('chart-type-select').addEventListener('change', (e) => {
+                        document.getElementById('action-selector-group').style.display = e.target.value === 'action' ? 'block' : 'none';
+                        document.getElementById('tag-selector-group').style.display = e.target.value === 'tag' ? 'block' : 'none';
+                    });
+                }
+            },
+
+            // 事件处理模块
+            events: {
+                init() {
+                    // 导航
+                    document.querySelector('.app-footer').addEventListener('click', this.handleNavClick);
+                    document.getElementById('prev-day-btn').addEventListener('click', () => this.handleDateChange(-1));
+                    document.getElementById('next-day-btn').addEventListener('click', () => this.handleDateChange(1));
+                    document.getElementById('theme-toggle-btn').addEventListener('click', this.handleThemeToggle);
+
+                    // 记录页面
+                    document.getElementById('add-action-btn').addEventListener('click', this.handleAddAction);
+                    document.getElementById('record-page-content').addEventListener('click', this.handleRecordPageClick);
+                    
+                    // 分析页面
+                    document.getElementById('add-chart-btn').addEventListener('click', this.handleAddChart);
+                    document.getElementById('analysis-page-content').addEventListener('click', this.handleAnalysisPageClick);
+
+                    // 头部按钮
+                    document.getElementById('action-library-btn').addEventListener('click', () => App.ui.renderActionLibraryModal());
+                    document.getElementById('history-log-btn').addEventListener('click', App.ui.renderHistoryLogModal);
+                    
+                    // 模态框 (事件委托)
+                    document.getElementById('modal-container').addEventListener('click', this.handleModalClick);
+                },
+
+                handleNavClick(e) {
+                    const navItem = e.target.closest('.nav-item');
+                    if (!navItem || navItem.id === 'theme-toggle-btn') return;
+                    
+                    const pageId = navItem.dataset.page;
+                    if (pageId && App.state.activePage !== pageId) {
+                        App.state.activePage = pageId;
+                        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                        document.getElementById(pageId).classList.add('active');
+
+                        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                        navItem.classList.add('active');
+
+                        // 渲染对应页面
+                        if (pageId === 'analysis-page') {
+                            App.ui.renderAnalysisPage();
+                        }
+                    }
+                },
+                
+                handleDateChange(days) {
+                    App.state.currentDate.setDate(App.state.currentDate.getDate() + days);
+                    App.ui.renderDate();
+                    App.ui.renderRecordPage();
+                },
+                
+                handleThemeToggle() {
+                    const settings = App.db.getSettings();
+                    settings.theme = settings.theme === 'light' ? 'dark' : 'light';
+                    App.db.saveSettings(settings);
+                    App.ui.updateTheme(settings.theme);
+                },
+
+                handleAddAction() {
+                    App.ui.renderActionLibraryModal(true, (actionName) => {
+                        const dateKey = App.utils.getDateKey(App.state.currentDate);
+                        const history = App.db.getWorkoutHistory();
+                        if (!history[dateKey]) {
+                            history[dateKey] = [];
+                        }
+                        // 检查是否已存在
+                        if (history[dateKey].some(a => a.name === actionName)) {
+                            alert(`动作 "${actionName}" 在今天已经添加过了。`);
+                            return;
+                        }
+                        history[dateKey].push({ name: actionName, logs: [] });
+                        App.db.saveWorkoutHistory(history);
+                        App.ui.renderRecordPage();
+                    });
+                },
+
+                handleRecordPageClick(e) {
+                    const target = e.target;
+                    const actionModule = target.closest('.action-module');
+                    if (!actionModule) return;
+                    
+                    const actionIndex = parseInt(actionModule.dataset.actionIndex);
+                    const actionName = actionModule.dataset.actionName;
+
+                    // 确认组
+                    if (target.closest('.btn-confirm-set')) {
+                        const weight = actionModule.querySelector('.weight-input').value;
+                        const reps = actionModule.querySelector('.reps-input').value;
+                        const rpe = actionModule.querySelector('.rpe-input').value;
+                        const notes = actionModule.querySelector('.notes-input').value;
+                        const unit = actionModule.querySelector('.unit-toggle').textContent;
+                        
+                        if (!weight || !reps) {
+                            alert('请输入重量和次数');
+                            return;
+                        }
+
+                        const dateKey = App.utils.getDateKey(App.state.currentDate);
+                        const history = App.db.getWorkoutHistory();
+                        history[dateKey][actionIndex].logs.push({
+                            weight: parseFloat(weight),
+                            reps: parseInt(reps),
+                            rpe: rpe,
+                            notes: notes,
+                            unit: unit
+                        });
+                        App.db.saveWorkoutHistory(history);
+                        App.ui.renderRecordPage();
+                    }
+
+                    // 切换单位
+                    if (target.classList.contains('unit-toggle')) {
+                        const currentUnit = target.textContent;
+                        const newUnit = currentUnit === 'kg' ? 'lbs' : 'kg';
+                        target.textContent = newUnit;
+                        
+                        const settings = App.db.getSettings();
+                        if (!settings.actionUnits) settings.actionUnits = {};
+                        settings.actionUnits[actionName] = newUnit;
+                        App.db.saveSettings(settings);
+                    }
+                    
+                    // 展开/收缩
+                    if (target.closest('.toggle-details')) {
+                        actionModule.querySelector('.module-details').classList.toggle('visible');
+                    }
+                    if (target.closest('.toggle-secondary')) {
+                        const slider = actionModule.querySelector('.action-module-slider');
+                        const isSlid = slider.style.transform === 'translateX(-50%)';
+                        slider.style.transform = isSlid ? 'translateX(0%)' : 'translateX(-50%)';
+                    }
+
+                    // 删除组
+                    if (target.closest('.btn-delete-set')) {
+                        const logIndex = parseInt(target.closest('.set-log-item').dataset.logIndex);
+                        if (confirm(`确定要删除第 ${logIndex + 1} 组数据吗？`)) {
+                            const dateKey = App.utils.getDateKey(App.state.currentDate);
+                            const history = App.db.getWorkoutHistory();
+                            history[dateKey][actionIndex].logs.splice(logIndex, 1);
+                            App.db.saveWorkoutHistory(history);
+                            App.ui.renderRecordPage();
+                        }
+                    }
+
+                    // 删除动作
+                    if (target.closest('.btn-delete-action')) {
+                         if (confirm(`确定要删除今天的 "${actionName}" 全部记录吗？`)) {
+                            const dateKey = App.utils.getDateKey(App.state.currentDate);
+                            const history = App.db.getWorkoutHistory();
+                            history[dateKey].splice(actionIndex, 1);
+                            App.db.saveWorkoutHistory(history);
+                            App.ui.renderRecordPage();
+                        }
+                    }
+
+                    // 全局重命名动作
+                    if (target.classList.contains('action-name')) {
+                        const oldName = actionName;
+                        const newName = prompt(`为 "${oldName}" 输入新的名称进行全局重命名：`, oldName);
+                        if (newName && newName.trim() !== '' && newName !== oldName) {
+                           if (confirm(`确定要将所有记录中的 "${oldName}" 重命名为 "${newName}" 吗？此操作不可撤销。`)) {
+                               App.utils.renameActionGlobally(oldName, newName);
+                               App.ui.renderRecordPage();
+                           }
+                        }
+                    }
+                },
+
+                handleModalClick(e) {
+                    // 关闭模态框
+                    if (e.target.closest('.close-modal') || e.target.classList.contains('modal')) {
+                        App.ui.hideModal();
+                    }
+                    // 动作库相关
+                    if (e.target.id === 'add-new-action-btn') {
+                        App.ui.renderActionFormModal();
+                    }
+                    if (e.target.closest('.edit-action-btn')) {
+                        const index = parseInt(e.target.closest('.edit-action-btn').dataset.index);
+                        const library = App.db.getActionLibrary();
+                        App.ui.renderActionFormModal(library[index], index);
+                    }
+                    if(e.target.id === 'export-actions-btn') {
+                        const library = App.db.getActionLibrary();
+                        const csv = App.utils.jsonToCsv(library, ['name', 'tags']);
+                        App.utils.downloadCsv(csv, 'action_library.csv');
+                    }
+                    if (e.target.id === 'import-actions-btn') {
+                        const fileInput = document.createElement('input');
+                        fileInput.type = 'file';
+                        fileInput.accept = '.csv';
+                        fileInput.onchange = (event) => {
+                            const file = event.target.files[0];
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                const csvData = e.target.result;
+                                try {
+                                    const jsonData = App.utils.csvToJson(csvData);
+                                    let library = App.db.getActionLibrary();
+                                    // 简单的合并去重
+                                    const newActions = jsonData.filter(newItem => 
+                                        !library.some(existingItem => existingItem.name === newItem.name)
+                                    ).map(item => ({...item, tags: item.tags ? item.tags.split(',').map(t=>t.trim()) : [] }));
+                                    
+                                    library.push(...newActions);
+                                    App.db.saveActionLibrary(library);
+                                    App.ui.renderActionLibraryModal();
+                                    alert(`${newActions.length}个新动作已导入！`);
+                                } catch (error) {
+                                    alert('导入失败，请检查CSV文件格式！');
+                                }
+                            };
+                            reader.readAsText(file);
+                        };
+                        fileInput.click();
+                    }
+                    
+                    // 历史日志相关
+                    const historyItemDate = e.target.closest('.log-history-item-date');
+                    if (historyItemDate) {
+                        const dateKey = historyItemDate.dataset.date;
+                        App.state.currentDate = new Date(dateKey);
+                        App.ui.hideModal();
+                        App.ui.renderDate();
+                        App.ui.renderRecordPage();
+                        // 切换到记录页
+                        document.querySelector('.nav-item[data-page="record-page"]').click();
+                    }
+                    if (e.target.id === 'export-selected-logs-btn') {
+                        const checkedBoxes = document.querySelectorAll('.history-checkbox:checked');
+                        const dateKeys = Array.from(checkedBoxes).map(cb => cb.value);
+                        if (dateKeys.length === 0) {
+                            alert('请至少选择一个日期进行导出。');
+                            return;
+                        }
+                        App.utils.exportWorkoutData(dateKeys);
+                    }
+                    
+                    // 创建图表
+                    if (e.target.id === 'create-chart-btn') {
+                        const type = document.getElementById('chart-type-select').value;
+                        const value = type === 'action' 
+                            ? document.getElementById('action-select').value 
+                            : document.getElementById('tag-select').value;
+                        
+                        if (!value) {
+                            alert('请选择一个有效的动作或标签。');
+                            return;
+                        }
+
+                        const dashboard = App.db.getDashboard();
+                        dashboard.push({ type, value });
+                        App.db.saveDashboard(dashboard);
+                        App.ui.hideModal();
+                        App.ui.renderAnalysisPage();
+                    }
+                },
+                
+                handleSaveAction(action, index, oldName) {
+                    let library = App.db.getActionLibrary();
+                    if (library.some((a, i) => a.name === action.name && i !== index)) {
+                        alert(`动作 "${action.name}" 已存在！`);
+                        return;
+                    }
+
+                    if (index === -1) { // 新增
+                        library.push(action);
+                    } else { // 编辑
+                        library[index] = action;
+                        // 如果名称变了，需要全局重命名
+                        if (oldName && oldName !== action.name) {
+                            if (confirm(`动作名称已改变，是否将所有历史记录中的 "${oldName}" 更新为 "${action.name}"？`)) {
+                                App.utils.renameActionGlobally(oldName, action.name);
+                            }
+                        }
+                    }
+                    App.db.saveActionLibrary(library);
+                    App.ui.hideModal();
+                    App.ui.renderActionLibraryModal();
+                },
+
+                handleDeleteActionFromLib(index, name) {
+                    if (confirm(`确定要从动作库中删除 "${name}" 吗？此操作不会删除已有的训练记录，但之后无法再添加此动作。`)) {
+                        let library = App.db.getActionLibrary();
+                        library.splice(index, 1);
+                        App.db.saveActionLibrary(library);
+                        App.ui.hideModal();
+                        App.ui.renderActionLibraryModal();
+                    }
+                },
+                
+                handleAddChart() {
+                    App.ui.renderAddChartModal();
+                },
+                
+                handleAnalysisPageClick(e) {
+                    const deleteBtn = e.target.closest('.btn-delete-chart');
+                    if(deleteBtn) {
+                        const card = deleteBtn.closest('.chart-card');
+                        const index = parseInt(card.dataset.dashboardIndex);
+                        
+                        if (confirm('确定要删除这个图表吗？')) {
+                            let dashboard = App.db.getDashboard();
+                            dashboard.splice(index, 1);
+                            App.db.saveDashboard(dashboard);
+                            App.ui.renderAnalysisPage();
+                        }
+                    }
+                }
+            },
+            
+            // 工具函数模块
+            utils: {
+                getDateKey(date) {
+                    return date.toISOString().split('T')[0];
+                },
+                
+                getHistoricalData(actionName) {
+                    const history = App.db.getWorkoutHistory();
+                    let bestWeight = 0;
+                    let bestSetString = '无';
+                    let lastWorkoutString = '无';
+                    let lastWorkoutDate = null;
+                    
+                    const sortedDates = Object.keys(history).sort((a,b) => new Date(b) - new Date(a));
+
+                    for (const dateKey of sortedDates) {
+                        const dayData = history[dateKey];
+                        const actionData = dayData.find(a => a.name === actionName);
+
+                        if (actionData && actionData.logs.length > 0) {
+                            if (!lastWorkoutDate) {
+                                lastWorkoutDate = dateKey;
+                                const lastSet = actionData.logs[actionData.logs.length-1];
+                                lastWorkoutString = `${lastSet.weight} ${lastSet.unit} × ${lastSet.reps}`;
+                            }
+
+                            actionData.logs.forEach(log => {
+                                let currentWeight = log.unit === 'lbs' ? log.weight * 0.453592 : log.weight;
+                                if (currentWeight > bestWeight) {
+                                    bestWeight = currentWeight;
+                                    bestSetString = `${log.weight} ${log.unit} × ${log.reps}`;
+                                }
+                            });
+                        }
+                    }
+                    return { bestSet: bestSetString, lastWorkout: lastWorkoutString };
+                },
+
+                renameActionGlobally(oldName, newName) {
+                    // 1. 更新动作库
+                    let library = App.db.getActionLibrary();
+                    const actionInLib = library.find(a => a.name === oldName);
+                    if (actionInLib) {
+                        actionInLib.name = newName;
+                    }
+                    App.db.saveActionLibrary(library);
+
+                    // 2. 更新训练历史
+                    let history = App.db.getWorkoutHistory();
+                    Object.values(history).forEach(dayData => {
+                        dayData.forEach(action => {
+                            if (action.name === oldName) {
+                                action.name = newName;
+                            }
+                        });
+                    });
+                    App.db.saveWorkoutHistory(history);
+
+                    // 3. 更新仪表盘配置
+                    let dashboard = App.db.getDashboard();
+                    dashboard.forEach(config => {
+                        if (config.type === 'action' && config.value === oldName) {
+                            config.value = newName;
+                        }
+                    });
+                    App.db.saveDashboard(dashboard);
+                    
+                    // 4. 更新单位设置
+                    let settings = App.db.getSettings();
+                    if(settings.actionUnits && settings.actionUnits[oldName]) {
+                        settings.actionUnits[newName] = settings.actionUnits[oldName];
+                        delete settings.actionUnits[oldName];
+                        App.db.saveSettings(settings);
+                    }
+                },
+                
+                getChartData(config) {
+                    const history = App.db.getWorkoutHistory();
+                    const sortedDates = Object.keys(history).sort((a,b) => new Date(a) - new Date(b));
+                    const labels = [];
+                    const volumes = [];
+                    const maxWeights = [];
+                    const actionLibrary = App.db.getActionLibrary();
+                    
+                    sortedDates.forEach(dateKey => {
+                        const dayData = history[dateKey];
+                        let dailyVolume = 0;
+                        let dailyMaxWeight = 0;
+
+                        if (config.type === 'action') {
+                            const action = dayData.find(a => a.name === config.value);
+                            if (action && action.logs.length > 0) {
+                                action.logs.forEach(log => {
+                                    const weightInKg = log.unit === 'lbs' ? log.weight * 0.453592 : log.weight;
+                                    dailyVolume += weightInKg * log.reps;
+                                    if (weightInKg > dailyMaxWeight) {
+                                        dailyMaxWeight = weightInKg;
+                                    }
+                                });
+                            }
+                        } else { // tag
+                            const actionsWithTag = actionLibrary.filter(a => a.tags.includes(config.value)).map(a => a.name);
+                            dayData.forEach(action => {
+                                if (actionsWithTag.includes(action.name)) {
+                                    action.logs.forEach(log => {
+                                        const weightInKg = log.unit === 'lbs' ? log.weight * 0.453592 : log.weight;
+                                        dailyVolume += weightInKg * log.reps;
+                                    });
+                                }
+                            });
+                        }
+                        
+                        if (dailyVolume > 0) {
+                            labels.push(dateKey);
+                            volumes.push(dailyVolume);
+                            if (config.type === 'action') {
+                                maxWeights.push(dailyMaxWeight);
+                            }
+                        }
+                    });
+
+                    return { labels, volumes, maxWeights };
+                },
+
+                jsonToCsv(jsonData, headers) {
+                    const replacer = (key, value) => value === null ? '' : value;
+                    const header = headers || Object.keys(jsonData[0]);
+                    let csv = jsonData.map(row => header.map(fieldName => JSON.stringify(row[fieldName], replacer)).join(','));
+                    csv.unshift(header.join(','));
+                    return csv.join('\r\n');
+                },
+
+                csvToJson(csvString) {
+                    const lines = csvString.split('\n');
+                    const result = [];
+                    const headers = lines[0].split(',').map(h => h.trim());
+                    for(let i = 1; i < lines.length; i++){
+                        if (!lines[i]) continue;
+                        const obj = {};
+                        const currentline = lines[i].split(',');
+                        for(let j = 0; j < headers.length; j++){
+                            obj[headers[j]] = currentline[j].replace(/"/g, '').trim();
+                        }
+                        result.push(obj);
+                    }
+                    return result;
+                },
+
+                downloadCsv(csvContent, fileName) {
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    if (link.download !== undefined) {
+                        const url = URL.createObjectURL(blob);
+                        link.setAttribute("href", url);
+                        link.setAttribute("download", fileName);
+                        link.style.visibility = 'hidden';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                },
+
+                exportWorkoutData(dateKeys) {
+                    const history = App.db.getWorkoutHistory();
+                    const dataToExport = [];
+                    dateKeys.forEach(dateKey => {
+                        const dayData = history[dateKey] || [];
+                        dayData.forEach(action => {
+                            action.logs.forEach((log, index) => {
+                                dataToExport.push({
+                                    date: dateKey,
+                                    actionName: action.name,
+                                    setNumber: index + 1,
+                                    weight: log.weight,
+                                    unit: log.unit,
+                                    reps: log.reps,
+                                    rpe: log.rpe || '',
+                                    notes: log.notes || ''
+                                });
+                            });
+                        });
+                    });
+
+                    if (dataToExport.length === 0) {
+                        alert('所选日期内没有可导出的数据。');
+                        return;
+                    }
+
+                    const csv = this.jsonToCsv(dataToExport);
+                    this.downloadCsv(csv, `workout_log_${new Date().toISOString().split('T')[0]}.csv`);
+                }
+            },
+            
+            pwa: {
+                register() {
+                    if ('serviceWorker' in navigator) {
+                        window.addEventListener('load', () => {
+                            navigator.serviceWorker.register('sw.js')
+                                .then(registration => console.log('ServiceWorker registration successful with scope: ', registration.scope))
+                                .catch(err => console.log('ServiceWorker registration failed: ', err));
+                        });
+                    }
+                }
+            },
+
+            // 应用初始化
+            init() {
+                this.pwa.register();
+                this.ui.initTheme();
+                this.ui.renderDate();
+                this.ui.renderRecordPage();
+                this.events.init();
+                
+                // 确保基础数据结构存在
+                if (!localStorage.getItem('actionLibrary')) {
+                    App.db.saveActionLibrary([
+                        { name: '杠铃卧推', tags: ['胸', '推', '复合动作'] },
+                        { name: '杠铃深蹲', tags: ['腿', '推', '复合动作'] },
+                        { name: '硬拉', tags: ['背', '腿', '拉', '复合动作'] }
+                    ]);
+                }
+            }
+        };
+
+        App.init();
+    });
     </script>
 </body>
 </html>
